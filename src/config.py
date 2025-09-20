@@ -116,8 +116,8 @@ def set_cfg(cfg):
     cfg.model = CN()
     
     # Architecture parameters
-    cfg.model.hidden_size = 256  # Hidden dimension (use power of 2 for v1, 300 recommended for v2)
-    cfg.model.nlayer_gnn = 2  # Number of GNN layers
+    cfg.model.hidden_size = 300  # Hidden dimension (use power of 2 for v1, 300 recommended for v2)
+    cfg.model.nlayer_gnn = 3  # Number of GNN layers
     cfg.model.nlayer_mlpmixer = 2  # Number of MLP-Mixer layers (v1 only)
     cfg.model.residual = True  # Enable residual connections
     
