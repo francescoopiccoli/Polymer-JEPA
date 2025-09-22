@@ -226,8 +226,17 @@ def get_random_data(ft_data: Any, size: int, seed: Optional[int] = None) -> List
     Returns:
         List of sampled data points
     """
+    dataset = ft_data
+    if not isinstance(dataset, list):
+        dataset = [x for x in dataset]
+    
+    random.seed(seed)
+    if size != len(ft_data):
+        dataset = random.sample(dataset, size)
+    else:
+        random.shuffle(dataset)
 
-    # include the least possible number of different monomerA and monomerB while making sure that all possible atoms are present in the dataset
+    return dataset
 def get_lab_data(ft_data, size, seed=None):
     torch.manual_seed(seed)
     ft_data.shuffle()
@@ -282,18 +291,6 @@ def get_lab_data(ft_data, size, seed=None):
     # randomly set torch seed based on the current time
     # torch.manual_seed(int(time.time()))
     # set random seed for python
-    
-    dataset = ft_data #.shuffle()
-    if not isinstance(dataset, list):
-        dataset = [x for x in dataset]
-    
-    random.seed(seed)
-    if size != len(ft_data):
-        dataset = random.sample(dataset, size)
-    else:
-        random.shuffle(dataset)
-
-    return dataset
 
 
 

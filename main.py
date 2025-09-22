@@ -69,6 +69,9 @@ def run(pretrn_trn_dataset, pretrn_val_dataset, pretrn_test_dataset,
     Returns:
         tuple: (train_loss, val_loss, test_loss, val_metrics, test_metrics)
     """
+    # Initialize wandb at the beginning of each run
+    start_WB_log_hyperparameters(cfg)
+    
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Using device: {device}')
 
@@ -246,7 +249,7 @@ if __name__ == '__main__':
                 idx_train = list(range(len(full_train_dataset)))
                 pretrain_size = int(0.4 * len(total_data)) / len(full_train_dataset)  # Proportion of training data to use for pretraining
                 pretrn_idx, ft_idx = train_test_split(idx_train, test_size=1-pretrain_size, random_state=seed)
-                pretrn_trn_dataset = full_train_dataset[ft_idx].copy()
+                pretrn_trn_dataset = full_train_dataset[pretrn_idx].copy()
                 pretrn_trn_dataset.transform = train_transform
 
                 # --- Finetuning split: remaining training data, subsampled according to FT percentage in cfg ---
@@ -322,7 +325,6 @@ if __name__ == '__main__':
         pretrn_val_dataset = []
 
         for run_idx, (train_index, test_index) in enumerate(zip(train_indices, test_indices)):
-            start_WB_log_hyperparameters(cfg)                
             print("----------------------------------------")
             print(f'Run {run_idx}/{cfg.runs-1}')
             if cfg.finetuneDataset == 'aldeghi': # pretrain and finetune on same dataset (aldeghi), pretrain and finetune val dataset are the same.

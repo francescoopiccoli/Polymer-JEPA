@@ -112,6 +112,9 @@ def train(train_loader, model, optimizer, device, momentum_weight,sharp=None, cr
 
 @ torch.no_grad()
 def test(loader, model, device, criterion_type=0, regularization=False, inv_weight=25, var_weight=25, cov_weight=1, jepa_weight=0.5, m_w_weight=0.5):
+    if len(loader) == 0:
+        return 0.0
+    
     total_loss = 0
     for idx, data in enumerate(loader):
         data = data.to(device)

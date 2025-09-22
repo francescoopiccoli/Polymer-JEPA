@@ -143,18 +143,22 @@ def pretrain(pre_trn_data, pre_val_data, cfg, device):
 
         model.eval()
 
-        val_loss = test(
-            pre_val_loader, 
-            model,
-            device=device, 
-            criterion_type=cfg.jepa.dist,
-            regularization=cfg.pretrain.regularization,
-            inv_weight=cfg.pretrain.inv_weight, 
-            var_weight=cfg.pretrain.var_weight, 
-            cov_weight=cfg.pretrain.cov_weight,
-            jepa_weight = cfg.pseudolabel.jepa_weight,
-            m_w_weight = cfg.pseudolabel.m_w_weight if cfg.pseudolabel.shouldUsePseudoLabel else 0
-        )
+        # Skip validation if no validation data (e.g., MonomerA split)
+        if len(pre_val_data) > 0:
+            val_loss = test(
+                pre_val_loader, 
+                model,
+                device=device, 
+                criterion_type=cfg.jepa.dist,
+                regularization=cfg.pretrain.regularization,
+                inv_weight=cfg.pretrain.inv_weight, 
+                var_weight=cfg.pretrain.var_weight, 
+                cov_weight=cfg.pretrain.cov_weight,
+                jepa_weight = cfg.pseudolabel.jepa_weight,
+                m_w_weight = cfg.pseudolabel.m_w_weight if cfg.pseudolabel.shouldUsePseudoLabel else 0
+            )
+        else:
+            val_loss = 0.0  # No validation data available
         
         save_path = f'Models/Pretrain/{model_name}'
         os.makedirs(save_path, exist_ok=True)
