@@ -14,7 +14,7 @@ Supported datasets:
 import collections
 import os
 import random
-from typing import List, Optional, Tuple, Any
+from typing import List, Optional, Tuple, Any, Dict
 
 import numpy as np
 import pandas as pd
@@ -295,6 +295,8 @@ def get_lab_data(ft_data, size, seed=None):
 
     return dataset
 
+
+
 def analyze_diblock_dataset() -> None:
     """Analyze the diblock copolymer dataset structure and composition.
     
@@ -329,5 +331,104 @@ def analyze_diblock_dataset() -> None:
     for i in range(9):
         m = Chem.MolFromSmiles(poly_strings[i])
         Chem.Draw.MolToImage(m).show()
+
+
+""" Slightly adjusted methods for the experiments with monomer A based splits """
+def get_graphs_by_monomerA(dataset: str = 'aldeghi', monomerA_list: List[str] = []) -> Tuple[List[Any], Any]:
+    """
+    Load graphs for a subset of monomer A identities.
+    Also returns the corresponding dataframe for reference with the rows that match the monomer A identities.
     
+    Args:
+        dataset: Dataset name ('aldeghi' only supported)
+        monomerA_list: List of monomer A identities to include
+    Returns:
+        Tuple of (graph_list, df) where graph_list contains PyG Data objects and df contains the corresponding df
+    """
+
+    if dataset == 'diblock':
+        raise NotImplementedError('Function not implemented for diblock dataset')
+    graphs = []
+    df = pd.read_csv('Data/aldeghi_coley_ea_ip_dataset.csv')
+    df_filtered = df[df['poly_chemprop_input'].str.split('|').str[0].str.split('.').str[0].isin(monomerA_list)]
+    for monomerA in monomerA_list:
+        for i in tqdm.tqdm(range(len(df))):
+            monomerA_id = df.loc[i, 'poly_chemprop_input'].split('|')[0].split('.')[0]
+            # If the monomer A of the current row is not the one we want, skip
+            if monomerA_id != monomerA:
+                continue
+            poly_strings = df.loc[i, 'poly_chemprop_input']
+            ea_values = df.loc[i, 'EA vs SHE (eV)']
+            ip_values = df.loc[i, 'IP vs SHE (eV)']
+            graph = poly_smiles_to_graph(
+                poly_strings=poly_strings, 
+                isAldeghiDataset=True,
+                y_EA=ea_values,
+                y_IP=ip_values
+            ) 
+            graphs.append(graph)
+            
+    return graphs, df_filtered
+
+def create_data_monomer_split(cfg, root, monomer_list) -> Tuple[Any, Any, Any]:
+    """Create dataset with transforms for training pipeline.
+    
+    Args:
+        cfg: Configuration object containing dataset and transform parameters
+        root: Root directory for dataset storage. If not provided, defaults to 'Data/{dataset}'
+        monomer_list: List of monomer A identities to include in the dataset
+        
+    Returns:
+        Tuple of (dataset, train_transform, val_transform)
+        
+    Raises:
+        ValueError: If dataset name is not supported
+    """
+    pre_transform = PositionalEncodingTransform(rw_dim=cfg.pos_enc.rw_dim)
+
+    transform_train = GraphJEPAPartitionTransform(
+        subgraphing_type=cfg.subgraphing.type,
+        num_targets=cfg.jepa.num_targets,
+        n_patches=cfg.subgraphing.n_patches,
+        patch_rw_dim=cfg.pos_enc.patch_rw_dim,
+        patch_num_diff=cfg.pos_enc.patch_num_diff,
+        drop_rate=cfg.subgraphing.drop_rate,
+        context_size=cfg.subgraphing.context_size,
+        target_size=cfg.subgraphing.target_size,
+        dataset=cfg.finetuneDataset
+    )
+
+    # no dropout for validation
+    transform_val = GraphJEPAPartitionTransform(
+        subgraphing_type=cfg.subgraphing.type,
+        num_targets=cfg.jepa.num_targets,
+        n_patches=cfg.subgraphing.n_patches,
+        patch_rw_dim=cfg.pos_enc.patch_rw_dim,
+        patch_num_diff=cfg.pos_enc.patch_num_diff,
+        drop_rate=0.0, 
+        context_size=cfg.subgraphing.context_size,
+        target_size=cfg.subgraphing.target_size,
+        dataset=cfg.finetuneDataset
+    )
+    
+    if cfg.finetuneDataset == 'aldeghi' and cfg.split_type == 'MonomerA':
+        all_graphs = []
+        # if already created, the pt file should be in root_path+"processed/dataset.pt"
+        if not os.path.isfile(f'{root}/processed/dataset.pt'):
+            # save monomer list to a text file in the root directory
+            # Make directory if it doesn't exist
+            os.makedirs(root, exist_ok=True)
+            with open(f'{root}/monomerA_list.txt', 'w') as f:
+                f.write(','.join(monomer_list))    
+            all_graphs, df_subset = get_graphs_by_monomerA(dataset=cfg.finetuneDataset, monomerA_list=monomer_list)
+            # save the subset dataframe to a csv file in the root directory, useful for benchmarking against other models
+            df_subset.to_csv(f'{root}/subset_dataframe.csv', index=False)
+            
+            
+        dataset = PolymerDataset(root=root, data_list=all_graphs, pre_transform=pre_transform)
+        
+        # return full dataset and transforms, split in pretrain/finetune, train/test is done in the training script with k fold
+        return dataset, transform_train, transform_val
+    else:
+        raise ValueError('Function only supports aldeghi dataset with MonomerA splits. Check configuration file. You might want to use create_data()')
 

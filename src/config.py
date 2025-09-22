@@ -36,6 +36,9 @@ def set_cfg(cfg):
     cfg.shouldFinetune = True  # Enable finetuning phase
     cfg.shouldFinetuneOnPretrainedModel = True  # Use pretrained weights for finetuning
     cfg.frozenWeights = False  # Freeze pretrained weights during finetuning
+
+    # Data split configuration
+    cfg.split_type = "MonomerA" # Random or MonomerA. MonomerA ensures no monomer A overlap between train and test sets for aldeghi dataset
     
     # Model and dataset selection
     cfg.modelVersion = 'v2'  # Model version: 'v1' (transformer-based) or 'v2' (GNN-based)
