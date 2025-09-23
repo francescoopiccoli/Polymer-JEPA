@@ -161,7 +161,7 @@ def run(pretrn_trn_dataset, pretrn_val_dataset, pretrn_test_dataset,
 
     return ft_trn_loss, ft_val_loss, ft_test_loss, metrics, metrics_test
 
-def save_metrics_to_csv(metrics, metrics_test, cfg, seeds):
+def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, fold_idx=None):
     """Save metrics to CSV files.
 
     Args:
@@ -172,8 +172,16 @@ def save_metrics_to_csv(metrics, metrics_test, cfg, seeds):
     """
     df = pd.DataFrame(dict(metrics))  # Convert defaultdict to DataFrame
     df_test = pd.DataFrame(dict(metrics_test))
+    # additionally add the test monomer name to the df
+    # read from the txt file in Data/fold_{fold_idx}/val/monomerA_list.txt
+    if cfg.split_type == "MonomerA" and fold_idx is not None:
+        with open(f'Data/MonomerA_CV/fold_{fold_idx}/val/monomerA_list.txt', 'r') as f:
+            monomerA_list = f.read().splitlines()
+        df['test_monomerA'] = ','.join(monomerA_list)
+        df_test['test_monomerA'] = ','.join(monomerA_list)
     variables = {
         "Split_type": cfg.split_type,
+        "Fold_idx": fold_idx,
         "PL": cfg.pseudolabel.shouldUsePseudoLabel,
         "layer_norm": cfg.pretrain.layer_norm,
         "seeds": seeds[0],
@@ -226,90 +234,81 @@ if __name__ == '__main__':
         monomerA_set = sorted(list(monomerA_set))
         print("Monomer A identities for cross-validation:", monomerA_set)
 
-        # Outer loop: 3 seeds (repetitions)
-        for seed_idx, seed in enumerate(seeds):
-            print(f"\n==== Seed set {seed_idx+1} (seed={seed}) ====")
-            trn_losses, val_losses, test_losses = [], [], []
+        # Inner loop: Leave-one-monomerA-out folds
+        # The random seed depends on cfg.seeds to ensure different random subsampling for each repetition of the CV
+        for fold_idx, val_monomerA in enumerate(monomerA_set):
+            print(f"\nFold {fold_idx+1}/{len(monomerA_set)}: Validation monomer A = {val_monomerA}")
 
-            # Inner loop: Leave-one-monomerA-out folds
-            for fold_idx, val_monomerA in enumerate(monomerA_set):
-                print(f"\nFold {fold_idx+1}/{len(monomerA_set)}: Validation monomer A = {val_monomerA}")
+            train_monomerA = [m for m in monomerA_set if m != val_monomerA]
+            # --- Create the graph datasets for the CV splits ---
+            # Root is dependent on fold idx
+            root_train = f'Data/MonomerA_CV/fold_{fold_idx}/train/'
+            root_val = f'Data/MonomerA_CV/fold_{fold_idx}/val/'
+            full_train_dataset, train_transform, val_transform  = create_data_monomer_split(cfg, root_train, monomer_list=train_monomerA)
+            full_val_dataset, _, _ = create_data_monomer_split(cfg, root_val, monomer_list=[val_monomerA])
 
-                train_monomerA = [m for m in monomerA_set if m != val_monomerA]
-                # --- Create the graph datasets for the CV splits ---
-                # Root is dependent on fold idx
-                root_train = f'Data/MonomerA_CV/fold_{fold_idx}/train/'
-                root_val = f'Data/MonomerA_CV/fold_{fold_idx}/val/'
-                full_train_dataset, train_transform, val_transform  = create_data_monomer_split(cfg, root_train, monomer_list=train_monomerA)
-                full_val_dataset, _, _ = create_data_monomer_split(cfg, root_val, monomer_list=[val_monomerA])
+            # --- Pretrain split: 40 % of total data ---
+            random.seed(seeds[0])
+            total_data = list(full_train_dataset) + list(full_val_dataset)
+            idx_train = list(range(len(full_train_dataset)))
+            pretrain_size = int(0.4 * len(total_data)) / len(full_train_dataset)  # Proportion of training data to use for pretraining
+            pretrn_idx, ft_idx = train_test_split(idx_train, test_size=1-pretrain_size, random_state=seeds[0])
+            pretrn_trn_dataset = full_train_dataset[pretrn_idx].copy()
+            pretrn_trn_dataset.transform = train_transform
 
-                # --- Pretrain split: 40 % of total data ---
-                random.seed(seed)
-                total_data = list(full_train_dataset) + list(full_val_dataset)
-                idx_train = list(range(len(full_train_dataset)))
-                pretrain_size = int(0.4 * len(total_data)) / len(full_train_dataset)  # Proportion of training data to use for pretraining
-                pretrn_idx, ft_idx = train_test_split(idx_train, test_size=1-pretrain_size, random_state=seed)
-                pretrn_trn_dataset = full_train_dataset[pretrn_idx].copy()
-                pretrn_trn_dataset.transform = train_transform
+            # --- Finetuning split: remaining training data, subsampled according to FT percentage in cfg ---
+            ft_trn_dataset = full_train_dataset[ft_idx].copy()
+            ft_trn_dataset.transform = train_transform
+            # To match other random split experiments (perc. * 40% of the data), we use perc.*0.4*total size
+            # use math.ceil in order to get the same exact amount of data used in Gao, Qinghe, et al. "Self-supervised graph neural networks for polymer property prediction." Molecular Systems Design & Engineering paper.
+            if cfg.finetune.aldeghiFTPercentage == 1:
+                dataset_size = len(ft_trn_dataset)
+            else:
+                dataset_size = int(math.ceil(cfg.finetune.aldeghiFTPercentage* 0.4 * (len(total_data))/64)*64)
+            # This flag is just for the finetune data sampling (only gets the ft_trn_dataset, so excl. test monomer A)
+            if cfg.finetune.dataScenario == 0:
+                ft_trn_dataset = get_random_data(ft_trn_dataset, dataset_size, seeds[0])
+            elif cfg.finetune.dataScenario == 1:
+                ft_trn_dataset = get_lab_data(ft_trn_dataset, dataset_size, seeds[0])
 
-                # --- Finetuning split: remaining training data, subsampled according to FT percentage in cfg ---
-                ft_trn_dataset = full_train_dataset[ft_idx].copy()
-                ft_trn_dataset.transform = train_transform
-                # To match other random split experiments (perc. * 40% of the data), we use perc.*0.4*total size
-                # use math.ceil in order to get the same exact amount of data used in Gao, Qinghe, et al. "Self-supervised graph neural networks for polymer property prediction." Molecular Systems Design & Engineering paper.
-                if cfg.finetune.aldeghiFTPercentage == 1:
-                    dataset_size = len(ft_trn_dataset)
-                else:
-                    dataset_size = int(math.ceil(cfg.finetune.aldeghiFTPercentage* 0.4 * (len(total_data))/64)*64)
-                # This flag is just for the finetune data sampling (only gets the ft_trn_dataset, so excl. test monomer A)
-                if cfg.finetune.dataScenario == 0:
-                    ft_trn_dataset = get_random_data(ft_trn_dataset, dataset_size, seed)
-                elif cfg.finetune.dataScenario == 1:
-                    ft_trn_dataset = get_lab_data(ft_trn_dataset, dataset_size, seed)
+            # --- Validation/Test split: 50/50 from val monomerA ---
+            # Validation and test set are the same for pretraining and finetuning
+            val_indices = list(range(len(full_val_dataset)))
+            val_idx, test_idx = train_test_split(val_indices, test_size=0.5, random_state=seeds[0])
+            pretrn_val_dataset = full_val_dataset[val_idx].copy()
+            pretrn_test_dataset = full_val_dataset[test_idx].copy()
+            # If using early stopping, we need a validation set for pretraining
+            pretrn_val_dataset.transform = val_transform
+            pretrn_val_dataset = [x for x in pretrn_val_dataset] # apply transform only once
+            ft_val_dataset = pretrn_val_dataset # use same val dataset for pretraining and finetuning
 
-                # --- Validation/Test split: 50/50 from val monomerA ---
-                # Validation and test set are the same for pretraining and finetuning
-                val_indices = list(range(len(full_val_dataset)))
-                val_idx, test_idx = train_test_split(val_indices, test_size=0.5, random_state=seed)
-                pretrn_val_dataset = full_val_dataset[val_idx].copy()
-                pretrn_test_dataset = full_val_dataset[test_idx].copy()
-                # If using early stopping, we need a validation set for pretraining
-                pretrn_val_dataset.transform = val_transform
-                pretrn_val_dataset = [x for x in pretrn_val_dataset] # apply transform only once
-                ft_val_dataset = pretrn_val_dataset # use same val dataset for pretraining and finetuning
+            pretrn_test_dataset.transform = val_transform
+            pretrn_test_dataset = [x for x in pretrn_test_dataset] # apply transform only once
+            ft_test_dataset = pretrn_test_dataset # use same test dataset for pretraining and finetuning
+            
+            # --- Run main training loop ---
+            ft_trn_loss, ft_val_loss, ft_test_loss, metric, metric_test = run(pretrn_trn_dataset, pretrn_val_dataset, pretrn_test_dataset, ft_trn_dataset, ft_val_dataset, ft_test_dataset)
 
-                pretrn_test_dataset.transform = val_transform
-                pretrn_test_dataset = [x for x in pretrn_test_dataset] # apply transform only once
-                ft_test_dataset = pretrn_test_dataset # use same test dataset for pretraining and finetuning
-                
-                # --- Run main training loop ---
-                ft_trn_loss, ft_val_loss, ft_test_loss, metric, metric_test = run(
-                    pretrn_trn_dataset=pretrn_trn_dataset,
-                    pretrn_val_dataset=[],  # or use part of val_graphs if needed
-                    pretrn_test_dataset=[],
-                    ft_trn_dataset=ft_trn_dataset,
-                    ft_val_dataset=ft_val_dataset,
-                    ft_test_dataset=ft_test_dataset
-                )
+            trn_losses.append(ft_trn_loss)
+            val_losses.append(ft_val_loss)
+            test_losses.append(ft_test_loss)
+            wandb_dict = {'final_ft_test_loss': ft_test_loss}
+            print(f"metrics_fold_{fold_idx}:", end=' ')
+            for k, v in metric.items():
+                metrics[k].append(v)
+                print(f"{k}={v}:", end=' ')
+            for k, v in metric_test.items():
+                metrics_test[k].append(v)
+                print(f"{k}={v}:", end=' ')
+            # Add fold index and monomer A test identity to the metrics
+            
+            wandb_dict.update(metric)
+            wandb_dict.update(metric_test)
+            wandb.log(wandb_dict)
+            wandb.finish()
 
-                trn_losses.append(ft_trn_loss)
-                val_losses.append(ft_val_loss)
-                test_losses.append(ft_test_loss)
-                wandb_dict = {'final_ft_test_loss': ft_test_loss}
-                print(f"metrics_fold_{fold_idx}:", end=' ')
-                for k, v in metric.items():
-                    metrics[k].append(v)
-                    print(f"{k}={v}:", end=' ')
-                for k, v in metric_test.items():
-                    metrics_test[k].append(v)
-                    print(f"{k}={v}:", end=' ')
-                wandb_dict.update(metric)
-                wandb_dict.update(metric_test)
-                wandb.log(wandb_dict)
-                wandb.finish()
-
-            # --- Print summary for this seed ---
-            save_metrics_to_csv(metrics, metrics_test, cfg, seeds)
+        # --- Print summary for this seed for all folds ---
+        save_metrics_to_csv(metrics, metrics_test, cfg, seeds, fold_idx)
 
     elif cfg.finetuneDataset == 'aldeghi' or cfg.finetuneDataset == 'diblock':
         full_aldeghi_dataset, train_transform, val_transform = create_data(cfg)
