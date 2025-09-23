@@ -7,7 +7,8 @@ from src.JEPA_models.PolymerJEPAv2 import PolymerJEPAv2
 from src.JEPA_models.PolymerJEPAv1 import PolymerJEPAv1
 
 from src.training import train, test, reset_parameters
-from src.visualize import visualeEmbeddingSpace, visualize_loss_space
+from src.visualize import visualeEmbeddingSpace, visualize_loss_space, plot_learning_curve
+from src.utils.reproducibility import set_seed, worker_init_fn
 import time
 import torch
 from torch_geometric.loader import DataLoader
@@ -40,8 +41,11 @@ def pretrain(pre_trn_data, pre_val_data, cfg, device):
     print(f'Pretraining training on: {len(pre_trn_data)} graphs')
     print(f'Pretraining validation on: {len(pre_val_data)} graphs')
 
-    pre_trn_loader = DataLoader(dataset=pre_trn_data, batch_size=cfg.pretrain.batch_size, shuffle=True, num_workers=cfg.num_workers)
-    pre_val_loader = DataLoader(dataset=pre_val_data, batch_size=cfg.pretrain.batch_size, shuffle=False, num_workers=cfg.num_workers)
+    # Set seeds for reproducibility
+    set_seed(cfg.seeds)
+
+    pre_trn_loader = DataLoader(dataset=pre_trn_data, batch_size=cfg.pretrain.batch_size, shuffle=True, num_workers=cfg.num_workers, worker_init_fn=worker_init_fn)
+    pre_val_loader = DataLoader(dataset=pre_val_data, batch_size=cfg.pretrain.batch_size, shuffle=False, num_workers=cfg.num_workers, worker_init_fn=worker_init_fn)
 
     if cfg.finetuneDataset == 'aldeghi' or cfg.finetuneDataset == 'diblock':
         if cfg.modelVersion == 'v1':
@@ -120,7 +124,10 @@ def pretrain(pre_trn_data, pre_val_data, cfg, device):
     if cfg.pretrain.early_stopping:
         early_stopping = EarlyStopping(patience=cfg.pretrain.early_stopping_patience)
 
-    
+    # train and val loss 
+    train_losses = []
+    val_losses = []
+
     # Pretraining
     for epoch in tqdm(range(cfg.pretrain.epochs), desc='Pretraining Epochs'):
         model.train()
@@ -181,6 +188,10 @@ def pretrain(pre_trn_data, pre_val_data, cfg, device):
         scheduler.step(val_loss)
 
         print(f'Epoch: {epoch:03d}, Train Loss: {trn_loss:.5f}' f' Test Loss:{val_loss:.5f}')
+
+        # Save train and val loss for visualization
+        train_losses.append(trn_loss)
+        val_losses.append(val_loss)
 
         if epoch == 0 or epoch == cfg.pretrain.epochs - 1 or epoch % 2 == 0:
 
@@ -262,6 +273,11 @@ def pretrain(pre_trn_data, pre_val_data, cfg, device):
             print("No early stopping until epoch:", epoch)
     else: 
         torch.save(model.state_dict(), f'{save_path}/model.pt')
+    
+    # Save train and val losses to file
+    if cfg.visualize.shouldPlotLearningCurve:
+        plot_learning_curve(train_losses, val_losses, model_name)
+
 
     return model, model_name
 

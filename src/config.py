@@ -27,8 +27,8 @@ def set_cfg(cfg):
     
     # Experiment settings
     cfg.experimentName = 'default'  # Experiment name for wandb tracking
-    cfg.seeds = 0  # Seed set selection (0, 1, or 2)
-    cfg.runs = 5  # Number of cross-validation runs
+    cfg.seeds = 0  # Seed set selection (0, 1, or 2) for three repetitions per CV fold
+    cfg.runs = 5  # Number of cross-validation runs in random splitting scenario
     cfg.num_workers = 0  # Number of workers for data loading
     
     # Training pipeline control
@@ -97,8 +97,8 @@ def set_cfg(cfg):
     cfg.finetune.wd = 0.0  # L2 regularization (weight decay)
     
     # Early stopping
-    cfg.finetune.early_stopping = 0  # Enable early stopping (0=False, 1=True)
-    cfg.finetune.early_stopping_patience = 5  # Early stopping patience
+    cfg.finetune.early_stopping = 1  # Enable early stopping (0=False, 1=True)
+    cfg.finetune.early_stopping_patience = 10  # Early stopping patience
     
     # Task configuration
     cfg.finetune.property = 'ea'  # Target property: 'ea' (electron affinity) or 'ip' (ionization potential)
@@ -107,7 +107,7 @@ def set_cfg(cfg):
     # Dataset size configuration
     # Aldeghi dataset: percentage relative to 40% of full dataset
     # Values: 0.01, 0.02, 0.04, 0.1, 0.2 correspond to 0.4%, 0.8%, 1.6%, 4%, 8% of total
-    cfg.finetune.aldeghiFTPercentage = 0.01
+    cfg.finetune.aldeghiFTPercentage = 0.2
     
     # Diblock dataset: percentage of ~4800 total graphs
     # Max 0.8 to match Aldeghi paper dataset size
@@ -182,6 +182,7 @@ def set_cfg(cfg):
     cfg.visualize.shouldEmbeddingSpace = True  # Generate 2D embedding plots
     cfg.visualize.shouldLoss = False  # Plot training/validation loss
     cfg.visualize.shouldPlotMetrics = False  # Plot evaluation metrics
+    cfg.visualize.shouldPlotLearningCurve = True  # Plot learning curves
 
     return cfg
 
