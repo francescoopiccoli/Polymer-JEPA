@@ -28,8 +28,11 @@ import numpy as np
 import torch
 import wandb
 from sklearn.model_selection import KFold, StratifiedShuffleSplit, train_test_split
+from rdkit import Chem
+from rdkit.Chem import AllChem, DataStructs
 
 # Local imports
+from src.utils.chemical_similarity import get_most_similar_monomerA
 from src.config import cfg, update_cfg
 from src.data import create_data, get_random_data, get_lab_data, create_data_monomer_split
 from src.finetune import finetune
@@ -202,17 +205,23 @@ def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, fold_idx=None):
         csv_filename = "metrics_diblock_train_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
         csv_filename_test = "metrics_diblock_test_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
     
+    # Save to Results/experiments_paper/MonomerA_CV/ or Results/experiments_paper/Random_CV/ based on split type
+    os.makedirs(f'Results/experiments_paper/{cfg.split_type}_CV/', exist_ok=True)
+    csv_filename = f'Results/experiments_paper/{cfg.split_type}_CV/' + csv_filename
+    csv_filename_test = f'Results/experiments_paper/{cfg.split_type}_CV/' + csv_filename_test
     df.to_csv(csv_filename, index=False)  # Save as csv
     df_test.to_csv(csv_filename_test, index=False)  # Save as csv
 
     
-def save_indices_to_txt(whole_train_data_subset, finetune_subset, test_data_subset, df_orig, fold_idx, cfg):
+def save_indices_to_txt(whole_train_data_subset, pretrain_subset, finetune_subset, val_subset, test_data_subset, df_orig, fold_idx, cfg):
     """Save dataset indices to a text file for reproducibility and use for baseline models.
     Based on string matching of the graph.poly_strings attribute with the original dataframe.
 
     Args:
         whole_train_data_subset: Dataset used for pretraining and finetuning.
+        pretrain_subset: Dataset used for pretraining, subsampled percentage.
         finetune_subset: Dataset used for finetuning, subsampled percentage.
+        val_subset: Dataset used for validation.
         test_data_subset: Dataset used for testing.
         df_orig: Original dataframe containing the full dataset.
         fold_idx: Index of the current fold (for cross-validation).
@@ -221,6 +230,8 @@ def save_indices_to_txt(whole_train_data_subset, finetune_subset, test_data_subs
         None
     """
     print("Saving dataset indices per fold for reproducibility...")
+    # Seed
+    seeds = SEED_SETS.get(cfg.seeds, SEED_SETS[0])
 
     # Build fast lookup dictionary
     string_to_idx = {s: i for i, s in enumerate(df_orig['poly_chemprop_input'])}
@@ -238,14 +249,26 @@ def save_indices_to_txt(whole_train_data_subset, finetune_subset, test_data_subs
         indices = get_indices(whole_train_data_subset)
         np.savetxt(savepath, indices, fmt='%d')
 
-    # Save finetune indices
-    savepath = f'Data/MonomerA_CV/fold_{fold_idx}/train/ft_trn_indices_perc_{cfg.finetune.aldeghiFTPercentage}.txt'
+    # Save pretrain indices, seed specific (that's what changes during repetitions and needs to be saved for other baselines)
+    savepath = f'Data/MonomerA_CV/fold_{fold_idx}/train/pretrn_trn_indices_seed_{seeds[0]}.txt'
+    if not os.path.exists(savepath):
+        indices = get_indices(pretrain_subset)
+        np.savetxt(savepath, indices, fmt='%d')
+    
+    # Save finetune indices, seed specific (that's what changes during repetitions and needs to be saved for other baselines)
+    savepath = f'Data/MonomerA_CV/fold_{fold_idx}/train/ft_trn_indices_perc_{cfg.finetune.aldeghiFTPercentage}_seed_{seeds[0]}.txt'
     if not os.path.exists(savepath):
         indices = get_indices(finetune_subset)
         np.savetxt(savepath, indices, fmt='%d')
 
+    # Save val indices
+    savepath = f'Data/MonomerA_CV/fold_{fold_idx}/val/val_indices.txt'
+    if not os.path.exists(savepath):
+        indices = get_indices(val_subset)
+        np.savetxt(savepath, indices, fmt='%d')
+    
     # Save test indices
-    savepath = f'Data/MonomerA_CV/fold_{fold_idx}/val/test_indices.txt'
+    savepath = f'Data/MonomerA_CV/fold_{fold_idx}/test/test_indices.txt'
     if not os.path.exists(savepath):
         indices = get_indices(test_data_subset)
         np.savetxt(savepath, indices, fmt='%d')
@@ -282,20 +305,26 @@ if __name__ == '__main__':
 
         # Inner loop: Leave-one-monomerA-out folds
         # The random seed depends on cfg.seeds to ensure different random subsampling for each repetition of the CV
-        for fold_idx, val_monomerA in enumerate(monomerA_set):
-            print(f"\nFold {fold_idx+1}/{len(monomerA_set)}: Validation monomer A = {val_monomerA}")
+        for fold_idx, test_monomerA in enumerate(monomerA_set):
 
-            train_monomerA = [m for m in monomerA_set if m != val_monomerA]
+            train_val_monomerA = [m for m in monomerA_set if m != test_monomerA]
+            # Get monomer A as validation set that is most similar to test monomer A
+            val_monomerA = get_most_similar_monomerA(test_monomerA, train_val_monomerA)
+            train_monomerA = [m for m in train_val_monomerA if m != test_monomerA]
+            print(f"\nFold {fold_idx+1}/{len(monomerA_set)}: Validation monomer A = {val_monomerA}, Test monomer A = {test_monomerA}")
+
             # --- Create the graph datasets for the CV splits ---
             # Root is dependent on fold idx
             root_train = f'Data/MonomerA_CV/fold_{fold_idx}/train/'
             root_val = f'Data/MonomerA_CV/fold_{fold_idx}/val/'
+            root_test = f'Data/MonomerA_CV/fold_{fold_idx}/test/'
             full_train_dataset, train_transform, val_transform  = create_data_monomer_split(cfg, root_train, monomer_list=train_monomerA)
-            full_test_dataset, _, _ = create_data_monomer_split(cfg, root_val, monomer_list=[val_monomerA])
+            full_val_dataset, _, _ = create_data_monomer_split(cfg, root_val, monomer_list=[val_monomerA])
+            full_test_dataset, _, _ = create_data_monomer_split(cfg, root_test, monomer_list=[test_monomerA])
 
             # --- Pretrain split: 40 % of total data ---
             random.seed(seeds[0])
-            total_data = list(full_train_dataset) + list(full_test_dataset)
+            total_data = list(full_train_dataset) + list(full_val_dataset) + list(full_test_dataset)
             idx_train = list(range(len(full_train_dataset)))
             pretrain_size = int(0.4 * len(total_data)) / len(full_train_dataset)  # Proportion of training data to use for pretraining
             # Remaining is used for finetuning + validation (10% of training data)
@@ -303,29 +332,23 @@ if __name__ == '__main__':
             pretrn_trn_dataset = full_train_dataset[pretrn_idx].copy()
             pretrn_trn_dataset.transform = train_transform
 
-            # Now split the remaining training data into validation (10%) and finetuning
-            # validation can't be from held out monomerA set
-            finetune_plus_val_num_graphs = len(full_train_dataset) - len(pretrn_trn_dataset)
-            val_size = int(0.1 * len(full_train_dataset))
-            ft_size_available = finetune_plus_val_num_graphs - val_size
-
-            # Split remaining training indices
-            val_idx, ft_idx = train_test_split(
-                remaining_idx, test_size=ft_size_available, random_state=seeds[0]
-            )
-            val_dataset = full_train_dataset[val_idx].copy()
+            # Validation set
+            # TODO: Optionally subsample (more realistic in data scarce scenario)
+            val_dataset = full_val_dataset.copy()
             val_dataset.transform = val_transform
             val_dataset = [x for x in val_dataset]
-            # val dataset is used for pretraining and finetuning, if early stopping is used
             pretrn_val_dataset = val_dataset
             ft_val_dataset = val_dataset
+            
+            # Finetune split: depending on cfg
+            ft_size_available = len(remaining_idx)
 
             # Finetune scenarios: subsample according to user's requested percentage
             desired_ft_size = int(math.ceil(cfg.finetune.aldeghiFTPercentage* 0.4 * (len(total_data))/64)*64)
             print(f"Requested finetune size: {desired_ft_size}, available data for finetuning: {ft_size_available}")
             if desired_ft_size > ft_size_available:
                 raise ValueError(f"Requested finetune size {desired_ft_size} exceeds available data {ft_size_available} in MonomerA split scenario. Reduce finetune percentage.")
-            ft_trn_dataset = full_train_dataset[ft_idx].copy()
+            ft_trn_dataset = full_train_dataset[remaining_idx].copy()
             ft_trn_dataset.transform = train_transform
 
             # This flag is just for the finetune data sampling (only gets the ft_trn_dataset, so excl. test monomer A)
@@ -340,7 +363,7 @@ if __name__ == '__main__':
             test_dataset = [x for x in test_dataset]
 
             # --- Save indices for reproducibility ---
-            save_indices_to_txt(full_train_dataset, ft_trn_dataset, test_dataset, df, fold_idx, cfg)
+            save_indices_to_txt(full_train_dataset, pretrn_trn_dataset, ft_trn_dataset, val_dataset, test_dataset, df, fold_idx, cfg)
             
             # --- Run main training loop ---
             ft_trn_loss, ft_val_loss, ft_test_loss, metric, metric_test = run(pretrn_trn_dataset, pretrn_val_dataset, test_dataset, ft_trn_dataset, ft_val_dataset, test_dataset)

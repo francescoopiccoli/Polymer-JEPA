@@ -164,6 +164,7 @@ def visualeEmbeddingSpace(embeddings, mon_A_type, stoichiometry, model_name='', 
     avg_std = np.mean(stds)
     print(f'\n***{type}***\nAverage mean of embeddings: {avg_mean:.3f}, highest feat mean: {np.max(means):.3f}, lowest feat mean: {np.min(means):.3f}')
     print(f'Average std of embeddings: {avg_std:.3f}\n')
+    print(f'Embeddings shape: {embeddings.shape}\n')
 
     # Randomly sample embeddings for easier visualization and faster computation
     desired_size = 3500
@@ -252,7 +253,7 @@ def plot_learning_curve(train_losses, val_losses, model_name=''):
     save_folder = f'Results/{model_name}/LearningCurve'
     os.makedirs(save_folder, exist_ok=True)
     plt.savefig(f"{save_folder}/learning_curve.png")
-    wandb.log({"learning_curve": wandb.Image(plt)}, commit=False)
+    #wandb.log({"learning_curve": wandb.Image(plt)}, commit=False) # crashes on cluster
     plt.close()
 
 
