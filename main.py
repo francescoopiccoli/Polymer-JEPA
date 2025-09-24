@@ -24,6 +24,7 @@ import time
 
 # Third-party imports
 import pandas as pd
+import numpy as np
 import torch
 import wandb
 from sklearn.model_selection import KFold, StratifiedShuffleSplit, train_test_split
@@ -205,6 +206,51 @@ def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, fold_idx=None):
     df_test.to_csv(csv_filename_test, index=False)  # Save as csv
 
     
+def save_indices_to_txt(whole_train_data_subset, finetune_subset, test_data_subset, df_orig, fold_idx, cfg):
+    """Save dataset indices to a text file for reproducibility and use for baseline models.
+    Based on string matching of the graph.poly_strings attribute with the original dataframe.
+
+    Args:
+        whole_train_data_subset: Dataset used for pretraining and finetuning.
+        finetune_subset: Dataset used for finetuning, subsampled percentage.
+        test_data_subset: Dataset used for testing.
+        df_orig: Original dataframe containing the full dataset.
+        fold_idx: Index of the current fold (for cross-validation).
+        cfg: Configuration object. Used to determine e.g. finetune percentage.
+    Returns:
+        None
+    """
+    print("Saving dataset indices per fold for reproducibility...")
+
+    # Build fast lookup dictionary
+    string_to_idx = {s: i for i, s in enumerate(df_orig['poly_chemprop_input'])}
+
+    # Utility function
+    def get_indices(graph_subset):
+        return [string_to_idx[graph.full_input_string] for graph in graph_subset]
+
+    os.makedirs(f'Data/MonomerA_CV/fold_{fold_idx}/train/', exist_ok=True)
+    os.makedirs(f'Data/MonomerA_CV/fold_{fold_idx}/val/', exist_ok=True)
+
+    # Save whole train indices
+    savepath = f'Data/MonomerA_CV/fold_{fold_idx}/train/whole_trn_indices.txt'
+    if not os.path.exists(savepath):
+        indices = get_indices(whole_train_data_subset)
+        np.savetxt(savepath, indices, fmt='%d')
+
+    # Save finetune indices
+    savepath = f'Data/MonomerA_CV/fold_{fold_idx}/train/ft_trn_indices_perc_{cfg.finetune.aldeghiFTPercentage}.txt'
+    if not os.path.exists(savepath):
+        indices = get_indices(finetune_subset)
+        np.savetxt(savepath, indices, fmt='%d')
+
+    # Save test indices
+    savepath = f'Data/MonomerA_CV/fold_{fold_idx}/val/test_indices.txt'
+    if not os.path.exists(savepath):
+        indices = get_indices(test_data_subset)
+        np.savetxt(savepath, indices, fmt='%d')
+
+    print("Indices saved.")
 
 if __name__ == '__main__':
     cfg = update_cfg(cfg) # update cfg with command line arguments
@@ -285,6 +331,9 @@ if __name__ == '__main__':
             pretrn_test_dataset.transform = val_transform
             pretrn_test_dataset = [x for x in pretrn_test_dataset] # apply transform only once
             ft_test_dataset = pretrn_test_dataset # use same test dataset for pretraining and finetuning
+
+            # --- Save the indices used for this fold for reproducibility ---
+            save_indices_to_txt(full_train_dataset,ft_trn_dataset,ft_test_dataset, df, fold_idx, cfg)
             
             # --- Run main training loop ---
             ft_trn_loss, ft_val_loss, ft_test_loss, metric, metric_test = run(pretrn_trn_dataset, pretrn_val_dataset, pretrn_test_dataset, ft_trn_dataset, ft_val_dataset, ft_test_dataset)

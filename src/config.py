@@ -107,7 +107,7 @@ def set_cfg(cfg):
     # Dataset size configuration
     # Aldeghi dataset: percentage relative to 40% of full dataset
     # Values: 0.01, 0.02, 0.04, 0.1, 0.2 correspond to 0.4%, 0.8%, 1.6%, 4%, 8% of total
-    cfg.finetune.aldeghiFTPercentage = 0.2
+    cfg.finetune.aldeghiFTPercentage = 0.02
     
     # Diblock dataset: percentage of ~4800 total graphs
     # Max 0.8 to match Aldeghi paper dataset size
