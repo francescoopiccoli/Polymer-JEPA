@@ -223,10 +223,16 @@ def finetune(ft_trn_data, ft_val_data, ft_test_data, model, model_name, cfg, dev
                 raise ValueError('Invalid dataset name')
             # Early stopping optionally
             if cfg.finetune.early_stopping:
-                early_stopping(val_loss, model)
-                if early_stopping.early_stop:
-                    print("Early stopping at epoch:", epoch)
-                    break
+                # Only check for early stopping if min_epochs have passed
+                if epoch + 1 >= cfg.finetune.min_epochs:
+                    early_stopping(val_loss, model)
+                    if early_stopping.early_stop:
+                        print("Early stopping at epoch:", epoch + 1)
+                        break
+                else:
+                    # Reset early stopping counter before min_epochs
+                    early_stopping.early_stop = False
+                    early_stopping.counter = 0
             
     # Evaluate the model on test set for final performance estimate
     if cfg.finetune.early_stopping:

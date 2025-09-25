@@ -165,34 +165,36 @@ def run(pretrn_trn_dataset, pretrn_val_dataset, pretrn_test_dataset,
 
     return ft_trn_loss, ft_val_loss, ft_test_loss, metrics, metrics_test
 
-def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, fold_idx=None):
+def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, test_monomers):
     """Save metrics to CSV files.
 
     Args:
-        metrics (dict): Dictionary of training/validation metrics.
+        metrics (dict): Dictionary of validation metrics.
         metrics_test (dict): Dictionary of test metrics.
         cfg: Configuration object.
         seeds (list): List of seeds used in the runs.
+        test_monomers (list): Ordered list of test monomers
     """
     df = pd.DataFrame(dict(metrics))  # Convert defaultdict to DataFrame
     df_test = pd.DataFrame(dict(metrics_test))
     # additionally add the test monomer name to the df
     # read from the txt file in Data/fold_{fold_idx}/val/monomerA_list.txt
-    if cfg.split_type == "MonomerA" and fold_idx is not None:
-        with open(f'Data/MonomerA_CV/fold_{fold_idx}/val/monomerA_list.txt', 'r') as f:
-            monomerA_list = f.read().splitlines()
-        df['test_monomerA'] = ','.join(monomerA_list)
-        df_test['test_monomerA'] = ','.join(monomerA_list)
+    # Add the test monomerA per fold to the dataframe
+    if cfg.split_type == "MonomerA":
+        if len(test_monomers) != len(df):
+            print(f"Warning: test_monomerA_list length {len(test_monomers)} != metrics rows {len(df)}. Adjust accordingly!")
+        # The following will assign the correct monomerA per row
+        df['test_monomerA'] = test_monomers[:len(df)]
+        df_test['test_monomerA'] = test_monomers[:len(df_test)]
     variables = {
         "Split_type": cfg.split_type,
-        "Fold_idx": fold_idx,
         "PL": cfg.pseudolabel.shouldUsePseudoLabel,
         "layer_norm": cfg.pretrain.layer_norm,
         "seeds": seeds[0],
         "finetune_percentage": cfg.finetune.aldeghiFTPercentage,
         "pretraining": cfg.shouldPretrain
     }
-    csv_filename = "metrics_train_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
+    csv_filename = "metrics_val_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
     csv_filename_test = "metrics_test_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
     if cfg.finetuneDataset == 'diblock':
         variables = {
@@ -202,7 +204,7 @@ def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, fold_idx=None):
             "finetune_percentage": cfg.finetune.diblockFTPercentage,
             "pretraining": cfg.shouldPretrain
         }
-        csv_filename = "metrics_diblock_train_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
+        csv_filename = "metrics_diblock_val_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
         csv_filename_test = "metrics_diblock_test_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
     
     # Save to Results/experiments_paper/MonomerA_CV/ or Results/experiments_paper/Random_CV/ based on split type
@@ -242,6 +244,7 @@ def save_indices_to_txt(whole_train_data_subset, pretrain_subset, finetune_subse
 
     os.makedirs(f'Data/MonomerA_CV/fold_{fold_idx}/train/', exist_ok=True)
     os.makedirs(f'Data/MonomerA_CV/fold_{fold_idx}/val/', exist_ok=True)
+    os.makedirs(f'Data/MonomerA_CV/fold_{fold_idx}/test/', exist_ok=True)
 
     # Save whole train indices
     savepath = f'Data/MonomerA_CV/fold_{fold_idx}/train/whole_trn_indices.txt'
@@ -387,7 +390,7 @@ if __name__ == '__main__':
             wandb.finish()
 
         # --- Print summary for this seed for all folds ---
-        save_metrics_to_csv(metrics, metrics_test, cfg, seeds, fold_idx)
+        save_metrics_to_csv(metrics, metrics_test, cfg, seeds, monomerA_set)
 
     elif cfg.finetuneDataset == 'aldeghi' or cfg.finetuneDataset == 'diblock':
         full_aldeghi_dataset, train_transform, val_transform = create_data(cfg)
