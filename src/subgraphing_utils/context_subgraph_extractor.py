@@ -1,5 +1,6 @@
 import random
 import torch
+import metis
 from torch_geometric.utils import to_networkx
 
 
