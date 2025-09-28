@@ -30,49 +30,6 @@
 - Target: 3.8 ± 1.4 nodes (highest target variability)
 - Intermediate 3.6:1 ratio, stochastic partitioning
 
-## Detailed Size Distribution Analysis
-
-### Motif-based Method (Context Size = 0.6)
-
-| Size Range | Count | Percentage |
-|------------|-------|------------|
-| 2-4 nodes  | 225   | 30.2%      |
-| 4-6 nodes  | 270   | 36.2%      |
-| 6-8 nodes  | 146   | 19.6%      |
-| 8-11 nodes | 29    | 3.9%       |
-| 11-13 nodes| 37    | 5.0%       |
-| 13-15 nodes| 16    | 2.1%       |
-| 15-17 nodes| 12    | 1.6%       |
-| 17-20 nodes| 10    | 1.3%       |
-
-**Total subgraphs analyzed**: 745
-
-### Random Walk Method (Context Size = 0.6)
-
-| Size Range | Count | Percentage |
-|------------|-------|------------|
-| 2-4 nodes  | 254   | 43.3%      |
-| 4-7 nodes  | 120   | 20.5%      |
-| 7-9 nodes  | 113   | 19.3%      |
-| 9-12 nodes | 39    | 6.7%       |
-| 12-14 nodes| 35    | 6.0%       |
-| 14-17 nodes| 17    | 2.9%       |
-| 17-19 nodes| 7     | 1.2%       |
-| 19-22 nodes| 1     | 0.2%       |
-
-**Total subgraphs analyzed**: 586
-
-
-
-## Statistical Significance
-
-The analysis was conducted on:
-- **Dataset**: Aldeghi polymer dataset (42,966 total graphs)
-- **Sample size**: Full dataset (42,966 graphs per method)
-- **Total subgraphs analyzed**: ~171,864 subgraphs across all three methods
-- **Context subgraphs**: ~42,966 per method (128,898 total)
-- **Target subgraphs**: ~42,966 per method (128,898 total, using num_targets=1)
-- **Context size parameter**: 0.6 (60% of graph)
 
 ## Key Observations
 
