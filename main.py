@@ -216,7 +216,7 @@ def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, test_monomers, val_mo
     df_test.to_csv(csv_filename_test, index=False)  # Save as csv
 
     
-def save_indices_to_txt(whole_train_data_subset, pretrain_subset, finetune_subset, val_subset, test_data_subset, df_orig, fold_idx, cfg):
+def save_indices_to_txt(whole_train_data_subset, pretrain_subset, finetune_subset, val_subset, test_data_subset, df_orig, fold_idx, cfg, val_set_scenario="MonomerA"):
     """Save dataset indices to a text file for reproducibility and use for baseline models.
     Based on string matching of the graph.poly_strings attribute with the original dataframe.
 
@@ -229,6 +229,7 @@ def save_indices_to_txt(whole_train_data_subset, pretrain_subset, finetune_subse
         df_orig: Original dataframe containing the full dataset.
         fold_idx: Index of the current fold (for cross-validation).
         cfg: Configuration object. Used to determine e.g. finetune percentage.
+        val_set_scenario: "MonomerA" or "Random", depending on how the validation set was created.
     Returns:
         None
     """
@@ -266,10 +267,16 @@ def save_indices_to_txt(whole_train_data_subset, pretrain_subset, finetune_subse
         np.savetxt(savepath, indices, fmt='%d')
 
     # Save val indices
-    savepath = f'Data/MonomerA_CV/fold_{fold_idx}/val/val_indices.txt'
-    if not os.path.exists(savepath):
-        indices = get_indices(val_subset)
-        np.savetxt(savepath, indices, fmt='%d')
+    if val_set_scenario == "MonomerA":
+        savepath = f'Data/MonomerA_CV/fold_{fold_idx}/val/val_indices.txt'
+        if not os.path.exists(savepath):
+            indices = get_indices(val_subset)
+            np.savetxt(savepath, indices, fmt='%d')
+    elif val_set_scenario == "Random":
+        savepath = f'Data/MonomerA_CV/fold_{fold_idx}/train/val_indices_seed_{seeds[0]}.txt'
+        if not os.path.exists(savepath):
+            indices = get_indices(val_subset)
+            np.savetxt(savepath, indices, fmt='%d')
     
     # Save test indices
     savepath = f'Data/MonomerA_CV/fold_{fold_idx}/test/test_indices.txt'
@@ -314,23 +321,40 @@ if __name__ == '__main__':
 
             train_val_monomerA = [m for m in monomerA_set if m != test_monomerA]
             # Get monomer A as validation set that is most similar to test monomer A
-            val_monomerA = get_most_similar_monomerA(test_monomerA, train_val_monomerA)
-            val_monomers.append(val_monomerA)
-            train_monomerA = [m for m in train_val_monomerA if m != val_monomerA]
-            print(f"\nFold {fold_idx+1}/{len(monomerA_set)}: Validation monomer A = {val_monomerA}, Test monomer A = {test_monomerA}")
+            # Two options for the validation set: 1. another A monomer, 2. random 10% of training data
+            val_split = "Random" # "Random" or "MonomerA"
+            if val_split == "MonomerA":
+                val_monomerA = get_most_similar_monomerA(test_monomerA, train_val_monomerA)
+                val_monomers.append(val_monomerA)
+                train_monomerA = [m for m in train_val_monomerA if m != val_monomerA]
+                print(f"\nFold {fold_idx+1}/{len(monomerA_set)}: Validation monomer A = {val_monomerA}, Test monomer A = {test_monomerA}")
+                # --- Create the graph datasets for the CV splits ---
+                # Root is dependent on fold idx
+                root_train = f'Data/MonomerA_CV/fold_{fold_idx}/train/'
+                root_val = f'Data/MonomerA_CV/fold_{fold_idx}/val/'
+                root_test = f'Data/MonomerA_CV/fold_{fold_idx}/test/'
+                full_val_dataset, _, _ = create_data_monomer_split(cfg, root_val, monomer_list=[val_monomerA])
+                full_train_dataset, train_transform, val_transform  = create_data_monomer_split(cfg, root_train, monomer_list=train_monomerA)
+                full_test_dataset, _, _ = create_data_monomer_split(cfg, root_test, monomer_list=[test_monomerA])
 
-            # --- Create the graph datasets for the CV splits ---
-            # Root is dependent on fold idx
-            root_train = f'Data/MonomerA_CV/fold_{fold_idx}/train/'
-            root_val = f'Data/MonomerA_CV/fold_{fold_idx}/val/'
-            root_test = f'Data/MonomerA_CV/fold_{fold_idx}/test/'
-            full_train_dataset, train_transform, val_transform  = create_data_monomer_split(cfg, root_train, monomer_list=train_monomerA)
-            full_val_dataset, _, _ = create_data_monomer_split(cfg, root_val, monomer_list=[val_monomerA])
-            full_test_dataset, _, _ = create_data_monomer_split(cfg, root_test, monomer_list=[test_monomerA])
+            elif val_split == "Random":
+                val_monomerA = None
+                train_monomerA = train_val_monomerA
+                print(f"\nFold {fold_idx+1}/{len(monomerA_set)}: Validation set = Random 10% of training data, Test monomer A = {test_monomerA}")
+                # --- Create the graph datasets for the CV splits ---
+                # Root is dependent on fold idx
+                root_train = f'Data/MonomerA_CV/fold_{fold_idx}/train/'
+                root_val = f'Data/MonomerA_CV/fold_{fold_idx}/val/'
+                root_test = f'Data/MonomerA_CV/fold_{fold_idx}/test/'
+                full_train_dataset, train_transform, val_transform  = create_data_monomer_split(cfg, root_train, monomer_list=train_monomerA)
+                full_test_dataset, _, _ = create_data_monomer_split(cfg, root_test, monomer_list=[test_monomerA])                
 
             # --- Pretrain split: 40 % of total data ---
             random.seed(seeds[0])
-            total_data = list(full_train_dataset) + list(full_val_dataset) + list(full_test_dataset)
+            if val_split == "MonomerA":
+                total_data = list(full_train_dataset) + list(full_val_dataset) + list(full_test_dataset)
+            elif val_split == "Random":
+                total_data = list(full_train_dataset) + list(full_test_dataset)
             idx_train = list(range(len(full_train_dataset)))
             pretrain_size = int(0.4 * len(total_data)) / len(full_train_dataset)  # Proportion of training data to use for pretraining
             # Remaining is used for finetuning + validation (10% of training data)
@@ -339,7 +363,13 @@ if __name__ == '__main__':
             pretrn_trn_dataset.transform = train_transform
 
             # Validation set
-            # TODO: Optionally subsample (more realistic in data scarce scenario)
+            # Validation set is either already created or we split it from remaining data (10% of training data)
+            if val_split == "Random":
+                val_size = 0.1 * len(full_train_dataset) / len(remaining_idx)
+                val_idx, finetune_idx = train_test_split(remaining_idx, test_size=1-val_size, random_state=seeds[0])
+                full_val_dataset = full_train_dataset[val_idx].copy()
+                remaining_idx = finetune_idx
+                        
             val_dataset = full_val_dataset.copy()
             val_dataset.transform = val_transform
             val_dataset = [x for x in val_dataset]
