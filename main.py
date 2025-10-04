@@ -160,12 +160,12 @@ def run(pretrn_trn_dataset, pretrn_val_dataset, pretrn_test_dataset,
     
     # check if folder Results/{model_name} exists, if so, delete it to save space
     # delete this code if you want to keep the plots of each run saved in the Results folder locally
-    if os.path.exists(f'Results/{model_name}'):
-        os.system(f'rm -r Results/{model_name}')
+    #if os.path.exists(f'Results/{model_name}'):
+    #    os.system(f'rm -r Results/{model_name}')
 
     return ft_trn_loss, ft_val_loss, ft_test_loss, metrics, metrics_test
 
-def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, test_monomers):
+def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, test_monomers, val_monomers):
     """Save metrics to CSV files.
 
     Args:
@@ -174,6 +174,7 @@ def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, test_monomers):
         cfg: Configuration object.
         seeds (list): List of seeds used in the runs.
         test_monomers (list): Ordered list of test monomers
+        val_monomers (list): Ordered list of val monomers
     """
     df = pd.DataFrame(dict(metrics))  # Convert defaultdict to DataFrame
     df_test = pd.DataFrame(dict(metrics_test))
@@ -184,7 +185,7 @@ def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, test_monomers):
         if len(test_monomers) != len(df):
             print(f"Warning: test_monomerA_list length {len(test_monomers)} != metrics rows {len(df)}. Adjust accordingly!")
         # The following will assign the correct monomerA per row
-        df['test_monomerA'] = test_monomers[:len(df)]
+        df['val_monomerA'] = val_monomers[:len(df)]
         df_test['test_monomerA'] = test_monomers[:len(df_test)]
     variables = {
         "Split_type": cfg.split_type,
@@ -308,12 +309,14 @@ if __name__ == '__main__':
 
         # Inner loop: Leave-one-monomerA-out folds
         # The random seed depends on cfg.seeds to ensure different random subsampling for each repetition of the CV
+        val_monomers = []
         for fold_idx, test_monomerA in enumerate(monomerA_set):
 
             train_val_monomerA = [m for m in monomerA_set if m != test_monomerA]
             # Get monomer A as validation set that is most similar to test monomer A
             val_monomerA = get_most_similar_monomerA(test_monomerA, train_val_monomerA)
-            train_monomerA = [m for m in train_val_monomerA if m != test_monomerA]
+            val_monomers.append(val_monomerA)
+            train_monomerA = [m for m in train_val_monomerA if m != val_monomerA]
             print(f"\nFold {fold_idx+1}/{len(monomerA_set)}: Validation monomer A = {val_monomerA}, Test monomer A = {test_monomerA}")
 
             # --- Create the graph datasets for the CV splits ---
@@ -390,7 +393,7 @@ if __name__ == '__main__':
             wandb.finish()
 
         # --- Print summary for this seed for all folds ---
-        save_metrics_to_csv(metrics, metrics_test, cfg, seeds, monomerA_set)
+        save_metrics_to_csv(metrics, metrics_test, cfg, seeds, monomerA_set, val_monomers)
 
     elif cfg.finetuneDataset == 'aldeghi' or cfg.finetuneDataset == 'diblock':
         full_aldeghi_dataset, train_transform, val_transform = create_data(cfg)

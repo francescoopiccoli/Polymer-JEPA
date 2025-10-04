@@ -57,7 +57,7 @@ def set_cfg(cfg):
     
     # Training hyperparameters
     cfg.pretrain.batch_size = 128  # Mini-batch size
-    cfg.pretrain.epochs = 2  # Maximum number of epochs
+    cfg.pretrain.epochs = 5  # Maximum number of epochs
     cfg.pretrain.lr = 0.0005  # Base learning rate
     cfg.pretrain.wd = 0.0  # L2 regularization (weight decay)
     cfg.pretrain.optimizer = 'Adam'  # Optimizer type
@@ -69,8 +69,7 @@ def set_cfg(cfg):
     
     # Early stopping
     cfg.pretrain.early_stopping = 0  # Enable early stopping (0=False, 1=True)
-    cfg.finetune.early_stopping_patience = 20  # Early stopping patience
-    cfg.finetune.min_epochs = 50 # Minimum number of epochs especially for smaller finetuning datasets
+    cfg.pretrain.early_stopping_patience = 2  # Early stopping patience
     
     # Regularization
     cfg.pretrain.dropout = 0.1  # Standard dropout rate
@@ -98,8 +97,9 @@ def set_cfg(cfg):
     cfg.finetune.wd = 0.0  # L2 regularization (weight decay)
     
     # Early stopping
-    cfg.finetune.early_stopping = 1  # Enable early stopping (0=False, 1=True)
-    cfg.finetune.early_stopping_patience = 10  # Early stopping patience
+    cfg.finetune.early_stopping = 0  # Enable early stopping (0=False, 1=True)
+    cfg.finetune.early_stopping_patience = 20  # Early stopping patience
+    cfg.finetune.min_epochs = 50 # Minimum number of epochs especially for smaller finetuning datasets   
     
     # Task configuration
     cfg.finetune.property = 'ea'  # Target property: 'ea' (electron affinity) or 'ip' (ionization potential)
