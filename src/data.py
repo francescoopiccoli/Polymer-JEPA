@@ -230,13 +230,16 @@ def get_random_data(ft_data: Any, size: int, seed: Optional[int] = None) -> List
     if not isinstance(dataset, list):
         dataset = [x for x in dataset]
     
-    random.seed(seed)
+    if seed is not None:
+        random.seed(seed)
+        
     if size != len(ft_data):
         dataset = random.sample(dataset, size)
     else:
         random.shuffle(dataset)
 
     return dataset
+  
 def get_lab_data(ft_data, size, seed=None):
     torch.manual_seed(seed)
     ft_data.shuffle()
@@ -291,7 +294,6 @@ def get_lab_data(ft_data, size, seed=None):
     # randomly set torch seed based on the current time
     # torch.manual_seed(int(time.time()))
     # set random seed for python
-
 
 
 def analyze_diblock_dataset() -> None:
