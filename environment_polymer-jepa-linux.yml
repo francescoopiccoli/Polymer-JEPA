@@ -1,4 +1,4 @@
-name: __apptainer__
+name: polymer-jepa-linux
 channels:
   - defaults
   - conda-forge
@@ -34,7 +34,7 @@ dependencies:
     - torch==2.1 
     - numpy==1.26.4
     - wandb==0.22.2
-    - networkx==3.4.2appt
+    - networkx==3.4.2
     - yacs==0.1.8
     - metis==0.2a5 # installs the pip version (the Python wrapper)
     - kaleido==1.1.0

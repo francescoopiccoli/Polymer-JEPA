@@ -1,4 +1,4 @@
-name: polymera-jepa-env
+name: polymera-jepa-macos
 channels:
   - pytorch
   - conda-forge
@@ -203,4 +203,3 @@ dependencies:
       - wurlitzer==3.0.3
       - xarray==2024.1.0
       - yacs==0.1.8
-prefix: /Users/francescopiccoli/anaconda3/envs/g2senv
