@@ -1,6 +1,7 @@
 import random
 import torch
 from torch_geometric.utils import to_networkx
+import metis
 
 
 # random walk based context subgraphing

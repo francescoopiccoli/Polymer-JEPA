@@ -165,7 +165,7 @@ def run(pretrn_trn_dataset, pretrn_val_dataset, pretrn_test_dataset,
 
     return ft_trn_loss, ft_val_loss, ft_test_loss, metrics, metrics_test
 
-def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, test_monomers, val_monomers):
+def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, test_monomers, val_monomers, val_split_scenario):
     """Save metrics to CSV files.
 
     Args:
@@ -175,6 +175,7 @@ def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, test_monomers, val_mo
         seeds (list): List of seeds used in the runs.
         test_monomers (list): Ordered list of test monomers
         val_monomers (list): Ordered list of val monomers
+        val_split_scenario: "MonomerA" or "Random", depending on how the validation set was created.
     """
     df = pd.DataFrame(dict(metrics))  # Convert defaultdict to DataFrame
     df_test = pd.DataFrame(dict(metrics_test))
@@ -185,7 +186,8 @@ def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, test_monomers, val_mo
         if len(test_monomers) != len(df):
             print(f"Warning: test_monomerA_list length {len(test_monomers)} != metrics rows {len(df)}. Adjust accordingly!")
         # The following will assign the correct monomerA per row
-        df['val_monomerA'] = val_monomers[:len(df)]
+        if val_split_scenario == "MonomerA":
+            df['val_monomerA'] = val_monomers[:len(df)]
         df_test['test_monomerA'] = test_monomers[:len(df_test)]
     variables = {
         "Split_type": cfg.split_type,
@@ -216,7 +218,7 @@ def save_metrics_to_csv(metrics, metrics_test, cfg, seeds, test_monomers, val_mo
     df_test.to_csv(csv_filename_test, index=False)  # Save as csv
 
     
-def save_indices_to_txt(whole_train_data_subset, pretrain_subset, finetune_subset, val_subset, test_data_subset, df_orig, fold_idx, cfg, val_set_scenario="MonomerA"):
+def save_indices_to_txt(whole_train_data_subset, pretrain_subset, finetune_subset, val_subset, test_data_subset, df_orig, fold_idx, cfg, val_split_scenario):
     """Save dataset indices to a text file for reproducibility and use for baseline models.
     Based on string matching of the graph.poly_strings attribute with the original dataframe.
 
@@ -229,7 +231,7 @@ def save_indices_to_txt(whole_train_data_subset, pretrain_subset, finetune_subse
         df_orig: Original dataframe containing the full dataset.
         fold_idx: Index of the current fold (for cross-validation).
         cfg: Configuration object. Used to determine e.g. finetune percentage.
-        val_set_scenario: "MonomerA" or "Random", depending on how the validation set was created.
+        val_split_scenario: "MonomerA" or "Random", depending on how the validation set was created.
     Returns:
         None
     """
@@ -267,12 +269,12 @@ def save_indices_to_txt(whole_train_data_subset, pretrain_subset, finetune_subse
         np.savetxt(savepath, indices, fmt='%d')
 
     # Save val indices
-    if val_set_scenario == "MonomerA":
+    if val_split_scenario == "MonomerA":
         savepath = f'Data/MonomerA_CV/fold_{fold_idx}/val/val_indices.txt'
         if not os.path.exists(savepath):
             indices = get_indices(val_subset)
             np.savetxt(savepath, indices, fmt='%d')
-    elif val_set_scenario == "Random":
+    elif val_split_scenario == "Random":
         savepath = f'Data/MonomerA_CV/fold_{fold_idx}/train/val_indices_seed_{seeds[0]}.txt'
         if not os.path.exists(savepath):
             indices = get_indices(val_subset)
@@ -399,7 +401,7 @@ if __name__ == '__main__':
             test_dataset = [x for x in test_dataset]
 
             # --- Save indices for reproducibility ---
-            save_indices_to_txt(full_train_dataset, pretrn_trn_dataset, ft_trn_dataset, val_dataset, test_dataset, df, fold_idx, cfg)
+            save_indices_to_txt(full_train_dataset, pretrn_trn_dataset, ft_trn_dataset, val_dataset, test_dataset, df, fold_idx, cfg, val_split_scenario=val_split)
             
             # --- Run main training loop ---
             ft_trn_loss, ft_val_loss, ft_test_loss, metric, metric_test = run(pretrn_trn_dataset, pretrn_val_dataset, test_dataset, ft_trn_dataset, ft_val_dataset, test_dataset)
@@ -423,9 +425,9 @@ if __name__ == '__main__':
             wandb.finish()
 
         # --- Print summary for this seed for all folds ---
-        save_metrics_to_csv(metrics, metrics_test, cfg, seeds, monomerA_set, val_monomers)
+        save_metrics_to_csv(metrics, metrics_test, cfg, seeds, monomerA_set, val_monomers, val_split_scenario=val_split)
 
-    elif cfg.finetuneDataset == 'aldeghi' or cfg.finetuneDataset == 'diblock':
+    elif cfg.split_type=="Random":
         full_aldeghi_dataset, train_transform, val_transform = create_data(cfg)
         
         # !! setting folds = runs is risky, they shouldn't be used as done here !!
@@ -532,7 +534,9 @@ if __name__ == '__main__':
             "layer_norm": cfg.pretrain.layer_norm,
             "seeds": seeds[0],
             "finetune_percentage": cfg.finetune.aldeghiFTPercentage,
-            "pretraining": cfg.shouldPretrain
+            "pretraining": cfg.shouldPretrain,
+            "subgraph_type": cfg.subgraphing.type,
+            "nr_targets": cfg.jepa.num_targets
 
         }
         csv_filename = "metrics_train_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
@@ -543,7 +547,9 @@ if __name__ == '__main__':
             "layer_norm": cfg.pretrain.layer_norm,
             "seeds": seeds[0],
             "finetune_percentage": cfg.finetune.diblockFTPercentage,
-            "pretraining": cfg.shouldPretrain
+            "pretraining": cfg.shouldPretrain,
+            "subgraph_type": cfg.subgraphing.type,
+            "nr_targets": cfg.jepa.num_targets
 
         }
         csv_filename = "metrics_diblock_train_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
@@ -555,7 +561,7 @@ if __name__ == '__main__':
 
 
     else:
-        raise ValueError('Invalid dataset name')
+        raise ValueError('Invalid split type')
     
     print("----------------------------------------")
     print(f'N of total runs {cfg.runs}')

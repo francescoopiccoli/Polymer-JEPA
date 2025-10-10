@@ -32,13 +32,13 @@ def set_cfg(cfg):
     cfg.num_workers = 0  # Number of workers for data loading
     
     # Training pipeline control
-    cfg.shouldPretrain = True  # Enable pretraining phase
+    cfg.shouldPretrain = False  # Enable pretraining phase
     cfg.shouldFinetune = True  # Enable finetuning phase
-    cfg.shouldFinetuneOnPretrainedModel = True  # Use pretrained weights for finetuning
+    cfg.shouldFinetuneOnPretrainedModel = False  # Use pretrained weights for finetuning
     cfg.frozenWeights = False  # Freeze pretrained weights during finetuning
 
     # Data split configuration
-    cfg.split_type = "MonomerA" # Random or MonomerA. MonomerA ensures no monomer A overlap between train and test sets for aldeghi dataset
+    cfg.split_type = "Random" # Random or MonomerA. MonomerA ensures no monomer A overlap between train and test sets for aldeghi dataset
     
     # Model and dataset selection
     cfg.modelVersion = 'v2'  # Model version: 'v1' (transformer-based) or 'v2' (GNN-based)
@@ -97,7 +97,7 @@ def set_cfg(cfg):
     cfg.finetune.wd = 0.0  # L2 regularization (weight decay)
     
     # Early stopping
-    cfg.finetune.early_stopping = 0  # Enable early stopping (0=False, 1=True)
+    cfg.finetune.early_stopping = 1  # Enable early stopping (0=False, 1=True)
     cfg.finetune.early_stopping_patience = 20  # Early stopping patience
     cfg.finetune.min_epochs = 50 # Minimum number of epochs especially for smaller finetuning datasets   
     
