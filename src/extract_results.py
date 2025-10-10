@@ -4,12 +4,13 @@ import re
 
 # Folder where csv files are stored
 # Run this script from ../
-folder_path = './' 
+folder_path = './Results/experiments_paper/MonomerA_CV/Norm_1/' 
 
 # Pattern to extract values from the filenames
 # Files from the training procedure in main.py
+# For random split: r'metrics_test_PL_(?P<PL>.*?)_layer_norm_(?P<norm>\d+)_seeds_(?P<seeds>\d+)_finetune_percentage_(?P<percentage>[\d.]+)_pretraining_(?P<pretraining>.*?).csv'
 filename_pattern = re.compile(
-    r'metrics_test_PL_(?P<PL>.*?)_layer_norm_(?P<norm>\d+)_seeds_(?P<seeds>\d+)_finetune_percentage_(?P<percentage>[\d.]+)_pretraining_(?P<pretraining>.*?).csv'
+    r'metrics_test_Split_type_MonomerA_PL_(?P<PL>.*?)_layer_norm_(?P<norm>\d+)_seeds_(?P<seeds>\d+)_finetune_percentage_(?P<percentage>[\d.]+)_pretraining_(?P<pretraining>.*?).csv'
 )
 
 # Collect all the data
@@ -24,13 +25,15 @@ for filename in os.listdir(folder_path):
             
             # Load the CSV content
             file_path = os.path.join(folder_path, filename)
-            df = pd.read_csv(file_path, header=None, names=['R2', 'RMSE'])
+            df = pd.read_csv(file_path)
+            df = df[["R2", "RMSE", "test_monomerA"]]
 
             # Add metadata to each row
             for _, row in df.iterrows():
                 all_data.append({
                     'R2': row['R2'],
                     'RMSE': row['RMSE'],
+                    "test_monomerA": row["test_monomerA"],
                     **metadata
                 })
 
@@ -38,15 +41,15 @@ for filename in os.listdir(folder_path):
 final_df = pd.DataFrame(all_data)
 
 # Remove rows where 'Metric' column contains things like 'R2' or 'RMSE'
-unwanted_metrics = ['R2', 'RMSE']
-final_df = final_df[~final_df['R2'].isin(unwanted_metrics)]
+#unwanted_metrics = ['R2', 'RMSE']
+#final_df = final_df[~final_df['R2'].isin(unwanted_metrics)]
 
 # Save to CSV
-final_df.to_csv('Results/experiments_paper/aldeghi_experiments_results_combined_metrics.csv', sep=';', decimal='.', index=False)
+final_df.to_csv(folder_path+'aldeghi_experiments_results_combined_metrics.csv', sep=';', decimal='.', index=False)
 
 
 # Load the CSV file using semicolon as the delimiter.
-df = pd.read_csv('Results/experiments_paper/aldeghi_experiments_results_combined_metrics.csv', delimiter=';')
+df = pd.read_csv(folder_path+'aldeghi_experiments_results_combined_metrics.csv', delimiter=';')
 
 # Standardize column names
 df.columns = df.columns.str.strip()
@@ -82,4 +85,19 @@ summary = df.groupby(group_keys, as_index=False).agg(
 )
 
 # Save the aggregated summary to a CSV using semicolon as the delimiter.
-summary.to_csv('Results/experiments_paper/summary_statistics.csv', sep=';', index=False)
+summary.to_csv(folder_path+'summary_statistics_MonomerA_CV.csv', sep=';', index=False)
+# Summary per A_monomer type: 
+summary_per_monomerA = df.groupby(group_keys + ['test_monomerA'], as_index=False).agg(
+    R2_mean=('R2', 'mean'),
+    R2_std=('R2', 'std'),
+    RMSE_mean=('RMSE', 'mean'),
+    RMSE_std=('RMSE', 'std')
+)
+
+# Split the df into separate CSVs for each monomer type
+mon_counter = 0
+for monomerA, group in summary_per_monomerA.groupby('test_monomerA'):
+    mon_counter+=1
+    output_filename = folder_path+f'summary_statistics_MonomerA_CV_{mon_counter}.csv'
+    group.to_csv(output_filename, sep=';', index=False)
+    print(f'Saved summary for {monomerA} to {output_filename}')

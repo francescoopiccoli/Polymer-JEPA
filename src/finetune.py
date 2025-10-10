@@ -2,6 +2,7 @@ from contextlib import redirect_stdout
 import os
 import numpy as np
 from src.visualize import visualize_aldeghi_results, visualize_diblock_results
+from src.utils.reproducibility import set_seed, worker_init_fn
 import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
@@ -36,15 +37,18 @@ class EarlyStopping:
 def finetune(ft_trn_data, ft_val_data, ft_test_data, model, model_name, cfg, device):
     print(f'Finetuning training on: {len(ft_trn_data)} graphs')
     print(f'Finetuning validating on: {len(ft_val_data)} graphs')
+
+    # Set seeds for reproducibility
+    set_seed(cfg.seeds)
     
     if cfg.modelVersion == 'v2':
         # no need to use transform at every data access
         ft_trn_data = [x for x in ft_trn_data]
         
 
-    ft_trn_loader = DataLoader(dataset=ft_trn_data, batch_size=cfg.finetune.batch_size, shuffle=True, num_workers=cfg.num_workers)
-    ft_val_loader = DataLoader(dataset=ft_val_data, batch_size=cfg.finetune.batch_size, shuffle=False, num_workers=cfg.num_workers)
-    ft_test_loader = DataLoader(dataset=ft_test_data, batch_size=cfg.finetune.batch_size, shuffle=False, num_workers=cfg.num_workers)
+    ft_trn_loader = DataLoader(dataset=ft_trn_data, batch_size=cfg.finetune.batch_size, shuffle=True, num_workers=cfg.num_workers, worker_init_fn=worker_init_fn)
+    ft_val_loader = DataLoader(dataset=ft_val_data, batch_size=cfg.finetune.batch_size, shuffle=False, num_workers=cfg.num_workers, worker_init_fn=worker_init_fn)
+    ft_test_loader = DataLoader(dataset=ft_test_data, batch_size=cfg.finetune.batch_size, shuffle=False, num_workers=cfg.num_workers, worker_init_fn=worker_init_fn)
 
     if cfg.finetune.early_stopping:
         early_stopping = EarlyStopping(patience=cfg.finetune.early_stopping_patience)
@@ -219,10 +223,16 @@ def finetune(ft_trn_data, ft_val_data, ft_test_data, model, model_name, cfg, dev
                 raise ValueError('Invalid dataset name')
             # Early stopping optionally
             if cfg.finetune.early_stopping:
-                early_stopping(val_loss, model)
-                if early_stopping.early_stop:
-                    print("Early stopping at epoch:", epoch)
-                    break
+                # Only check for early stopping if min_epochs have passed
+                if epoch + 1 >= cfg.finetune.min_epochs:
+                    early_stopping(val_loss, model)
+                    if early_stopping.early_stop:
+                        print("Early stopping at epoch:", epoch + 1)
+                        break
+                else:
+                    # Reset early stopping counter before min_epochs
+                    early_stopping.early_stop = False
+                    early_stopping.counter = 0
             
     # Evaluate the model on test set for final performance estimate
     if cfg.finetune.early_stopping:

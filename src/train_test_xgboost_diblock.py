@@ -61,7 +61,7 @@ if __name__ == '__main__':
 
                 # Train XGBoost instead of RF
                 model = XGBClassifier(
-                    n_estimators=500,
+                    n_estimators=100,
                     max_depth=8,
                     learning_rate=0.05,
                     subsample=0.8,

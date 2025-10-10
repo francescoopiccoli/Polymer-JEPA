@@ -16,6 +16,22 @@ agg_df['real_percentage in %'] = agg_df['finetune_percentage'] * 40
 
 agg_df.to_csv('Results/experiments_paper/summary_RF_aldeghi.csv')
 
+# Monomer A split results
+df = pd.read_csv('Results/experiments_paper/RF_results_MonomerA_split_test.csv')
+
+# Group by 'finetune_percentage' and aggregate
+agg_df = df.groupby('finetune_percentage').agg(
+    r2_mean=('r2', 'mean'),
+    r2_std=('r2', 'std'),
+    rmse_mean=('rmse', 'mean'),
+    rmse_std=('rmse', 'std')
+).reset_index()
+
+# Add 'real_percentage' column
+agg_df['real_percentage in %'] = agg_df['finetune_percentage'] * 40
+
+agg_df.to_csv('Results/experiments_paper/summary_RF_aldeghi_MonomerA_split.csv')
+
 # Load classification csv
 df_c = pd.read_csv('Results/experiments_paper/RF_results_diblock_test_stoich.csv')
 
@@ -30,7 +46,7 @@ agg_df_c.to_csv('Results/experiments_paper/summary_RF_diblock.csv')
 
 # Aggregate results from xgboost
 # Load regression csv
-df_xgb = pd.read_csv('Results/experiments_paper/XGB_results_test.csv')
+df_xgb = pd.read_csv('Results/experiments_paper/XGB_results_Random_split_test.csv')
 # Group by 'finetune_percentage' and aggregate
 agg_df_xgb = df_xgb.groupby('finetune_percentage').agg(
     r2_mean=('r2', 'mean'),
@@ -40,7 +56,25 @@ agg_df_xgb = df_xgb.groupby('finetune_percentage').agg(
 ).reset_index()
 # Add 'real_percentage' column
 agg_df_xgb['real_percentage in %'] = agg_df_xgb['finetune_percentage'] * 40
-agg_df_xgb.to_csv('Results/experiments_paper/summary_XGB_aldeghi.csv')
+agg_df_xgb.to_csv('Results/experiments_paper/summary_XGB_aldeghi_Random_split.csv')
+
+# Monomer A split results
+df = pd.read_csv('Results/experiments_paper/XGB_results_MonomerA_split_test.csv')
+
+# Group by 'finetune_percentage' and aggregate
+agg_df = df.groupby('finetune_percentage').agg(
+    r2_mean=('r2', 'mean'),
+    r2_std=('r2', 'std'),
+    rmse_mean=('rmse', 'mean'),
+    rmse_std=('rmse', 'std')
+).reset_index()
+
+# Add 'real_percentage' column
+agg_df['real_percentage in %'] = agg_df['finetune_percentage'] * 40
+
+agg_df.to_csv('Results/experiments_paper/summary_XGB_aldeghi_MonomerA_split.csv')
+
+
 # Load classification csv
 df_xgb_c = pd.read_csv('Results/experiments_paper/XGB_results_diblock_test_stoich.csv')
 # Group by 'finetune_percentage' and aggregate

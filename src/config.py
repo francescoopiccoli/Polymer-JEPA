@@ -27,15 +27,18 @@ def set_cfg(cfg):
     
     # Experiment settings
     cfg.experimentName = 'default'  # Experiment name for wandb tracking
-    cfg.seeds = 0  # Seed set selection (0, 1, or 2)
-    cfg.runs = 5  # Number of cross-validation runs
+    cfg.seeds = 0  # Seed set selection (0, 1, or 2) for three repetitions per CV fold
+    cfg.runs = 5  # Number of cross-validation runs in random splitting scenario
     cfg.num_workers = 0  # Number of workers for data loading
     
     # Training pipeline control
-    cfg.shouldPretrain = True  # Enable pretraining phase
+    cfg.shouldPretrain = False  # Enable pretraining phase
     cfg.shouldFinetune = True  # Enable finetuning phase
-    cfg.shouldFinetuneOnPretrainedModel = True  # Use pretrained weights for finetuning
+    cfg.shouldFinetuneOnPretrainedModel = False  # Use pretrained weights for finetuning
     cfg.frozenWeights = False  # Freeze pretrained weights during finetuning
+
+    # Data split configuration
+    cfg.split_type = "Random" # Random or MonomerA. MonomerA ensures no monomer A overlap between train and test sets for aldeghi dataset
     
     # Model and dataset selection
     cfg.modelVersion = 'v2'  # Model version: 'v1' (transformer-based) or 'v2' (GNN-based)
@@ -54,7 +57,7 @@ def set_cfg(cfg):
     
     # Training hyperparameters
     cfg.pretrain.batch_size = 128  # Mini-batch size
-    cfg.pretrain.epochs = 10  # Maximum number of epochs
+    cfg.pretrain.epochs = 5  # Maximum number of epochs
     cfg.pretrain.lr = 0.0005  # Base learning rate
     cfg.pretrain.wd = 0.0  # L2 regularization (weight decay)
     cfg.pretrain.optimizer = 'Adam'  # Optimizer type
@@ -94,8 +97,9 @@ def set_cfg(cfg):
     cfg.finetune.wd = 0.0  # L2 regularization (weight decay)
     
     # Early stopping
-    cfg.finetune.early_stopping = 0  # Enable early stopping (0=False, 1=True)
-    cfg.finetune.early_stopping_patience = 5  # Early stopping patience
+    cfg.finetune.early_stopping = 1  # Enable early stopping (0=False, 1=True)
+    cfg.finetune.early_stopping_patience = 20  # Early stopping patience
+    cfg.finetune.min_epochs = 50 # Minimum number of epochs especially for smaller finetuning datasets   
     
     # Task configuration
     cfg.finetune.property = 'ea'  # Target property: 'ea' (electron affinity) or 'ip' (ionization potential)
@@ -104,7 +108,7 @@ def set_cfg(cfg):
     # Dataset size configuration
     # Aldeghi dataset: percentage relative to 40% of full dataset
     # Values: 0.01, 0.02, 0.04, 0.1, 0.2 correspond to 0.4%, 0.8%, 1.6%, 4%, 8% of total
-    cfg.finetune.aldeghiFTPercentage = 0.01
+    cfg.finetune.aldeghiFTPercentage = 0.02
     
     # Diblock dataset: percentage of ~4800 total graphs
     # Max 0.8 to match Aldeghi paper dataset size
@@ -179,6 +183,7 @@ def set_cfg(cfg):
     cfg.visualize.shouldEmbeddingSpace = True  # Generate 2D embedding plots
     cfg.visualize.shouldLoss = False  # Plot training/validation loss
     cfg.visualize.shouldPlotMetrics = False  # Plot evaluation metrics
+    cfg.visualize.shouldPlotLearningCurve = True  # Plot learning curves
 
     return cfg
 
