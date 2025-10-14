@@ -529,31 +529,33 @@ if __name__ == '__main__':
         # Save results as excel
         df = pd.DataFrame(dict(metrics))  # Convert defaultdict to DataFrame
         df_test = pd.DataFrame(dict(metrics_test))
-        variables = {
-            "PL": cfg.pseudolabel.shouldUsePseudoLabel,
-            "layer_norm": cfg.pretrain.layer_norm,
-            "seeds": seeds[0],
-            "finetune_percentage": cfg.finetune.aldeghiFTPercentage,
-            "pretraining": cfg.shouldPretrain,
-            "subgraph_type": cfg.subgraphing.type,
-            "nr_targets": cfg.jepa.num_targets
+        if cfg.finetuneDataset == 'aldeghi':
+            variables = {
+                "PL": cfg.pseudolabel.shouldUsePseudoLabel,
+                "layer_norm": cfg.pretrain.layer_norm,
+                "seeds": seeds[0],
+                "finetune_percentage": cfg.finetune.aldeghiFTPercentage,
+                "pretraining": cfg.shouldPretrain,
+                "subgraph_type": cfg.subgraphing.type,
+                "nr_targets": cfg.jepa.num_targets, 
+                "context_size": cfg.subgraphing.context_size, 
+                "target_size": cfg.subgraphing.target_size
 
-        }
-        csv_filename = "metrics_train_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
-        csv_filename_test = "metrics_test_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
+            }
+            csv_filename = "metrics_train_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
+            csv_filename_test = "metrics_test_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
         if cfg.finetuneDataset == 'diblock':
             variables = {
-            "PL": cfg.pseudolabel.shouldUsePseudoLabel,
-            "layer_norm": cfg.pretrain.layer_norm,
-            "seeds": seeds[0],
-            "finetune_percentage": cfg.finetune.diblockFTPercentage,
-            "pretraining": cfg.shouldPretrain,
-            "subgraph_type": cfg.subgraphing.type,
-            "nr_targets": cfg.jepa.num_targets
-
-        }
-        csv_filename = "metrics_diblock_train_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
-        csv_filename_test = "metrics_diblock_test_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
+                "PL": cfg.pseudolabel.shouldUsePseudoLabel,
+                "layer_norm": cfg.pretrain.layer_norm,
+                "seeds": seeds[0],
+                "finetune_percentage": cfg.finetune.diblockFTPercentage,
+                "pretraining": cfg.shouldPretrain,
+                "subgraph_type": cfg.subgraphing.type,
+                "nr_targets": cfg.jepa.num_targets
+            }
+            csv_filename = "metrics_diblock_train_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
+            csv_filename_test = "metrics_diblock_test_" + "_".join(f"{k}_{v}" for k, v in variables.items()) + ".csv"
         df.to_csv(csv_filename, index=False)  # Save as csv
         df_test.to_csv(csv_filename_test, index=False)  # Save as csv
 
