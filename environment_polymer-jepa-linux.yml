@@ -1,4 +1,4 @@
-name: polymer-jepa-linux
+name: polymer-jepa
 channels:
   - defaults
   - conda-forge

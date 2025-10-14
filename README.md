@@ -1,16 +1,25 @@
 # Polymer-JEPA
 
-
-### Setup Environment
-
-#### Option 1: Conda Environment
+## Setup Environment
+### Option 1: Conda Environment (preferred for same package versions)
+There are two .yml files to create the conda environment:
+\
+For Linux:
 ```bash
-conda create -n polymer-jepa python=3.10
-conda activate polymer-jepa
-pip install -r requirements.txt
+# Create environment from the exported YML file (linux)
+conda env create -f environment_polymera-jepa-linux.yml
+# Activate the environment
+conda activate polymera-jepa
+```
+For MacOS:
+```bash
+# Create environment from the exported YML file (linux)
+conda env create -f environment_polymera-jepa-macos.yml
+# Activate the environment
+conda activate polymera-jepa
 ```
 
-#### Option 2: PyTorch Geometric Installation
+### Option 2: Manual PyTorch Geometric Installation
 ```bash
 conda create -n polymer-jepa python=3.10
 conda activate polymer-jepa
@@ -18,7 +27,7 @@ pip install torch-geometric==2.3.0 torch-sparse torch-scatter torch-cluster -f h
 pip install torch==2.1 wandb networkx yacs metis kaleido tensorboard einops pillow tqdm pandas rdkit matplotlib plotly seaborn umap
 ```
 
-#### Option 3: Containerization
+### Option 3: Containerization
 Alternatively setup the environment using containerization (see `environment_apptainer.yml` and `apptainer_env.def` files).
 
 ### Project Structure
@@ -119,7 +128,7 @@ python -c "from src.data import get_graphs; get_graphs('aldeghi')"
 **Note**: Graph conversion runs automatically on first execution. Subsequent runs load cached graphs unless files are deleted.
 
 #### Data Selection Strategies
-- Random Sampling** (`getRandomData()`): Standard random selection from available data (method used in the research paper)
+- Data split scenario can be configured in `src/config.py`: Random datasplit or scaffold-based MonomerA split.
 
 #### Data Format and Structure
 **Input Format**: Polymer SMILES strings follow the pattern:
@@ -140,8 +149,8 @@ Example: `[*:1]c1cc(F)c([*:2])cc1F.[*:3]c1c(O)cc(O)c([*:4])c1O|0.5|0.5|<1-2:0.37
 #### Configuration
 Key data processing parameters in `src/config.py`:
 - `cfg.finetuneDataset`: Dataset selection ('aldeghi', 'diblock')
-- `cfg.finetune.aldeghiFTPercentage`: Training data percentage for Aldeghi
-- `cfg.finetune.diblockFTPercentage`: Training data percentage for diblock
+- `cfg.finetune.aldeghiFTPercentage`: Training data percentage for Aldeghi dataset
+- `cfg.finetune.diblockFTPercentage`: Training data percentage for diblock dataset
 
 ### Usage
 

@@ -1,4 +1,4 @@
-name: polymera-jepa-macos
+name: polymera-jepa
 channels:
   - pytorch
   - conda-forge
