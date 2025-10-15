@@ -3,8 +3,6 @@ From: condaforge/miniforge3:latest
 
 %files
     environment_apptainer.yml /environment_apptainer.yml
-    requirements.txt /requirements.txt
-
 
 %post
     # Update and install necessary packages
@@ -28,3 +26,4 @@ From: condaforge/miniforge3:latest
     # Now add the script to activate the Conda environment
     echo '. "/opt/conda/etc/profile.d/conda.sh"' >> $APPTAINER_ENVIRONMENT
     echo 'conda activate __apptainer__' >> $APPTAINER_ENVIRONMENT
+    echo 'export METIS_DLL=$CONDA_PREFIX/lib/libmetis.so' >> $APPTAINER_ENVIRONMENT

@@ -1,9 +1,8 @@
 from contextlib import redirect_stdout
 import os
 import numpy as np
-import random
-from src.config import cfg
 from src.visualize import visualize_aldeghi_results, visualize_diblock_results
+from src.utils.reproducibility import set_seed, worker_init_fn
 import torch
 import torch.nn as nn
 from torch_geometric.loader import DataLoader
@@ -38,15 +37,18 @@ class EarlyStopping:
 def finetune(ft_trn_data, ft_val_data, ft_test_data, model, model_name, cfg, device):
     print(f'Finetuning training on: {len(ft_trn_data)} graphs')
     print(f'Finetuning validating on: {len(ft_val_data)} graphs')
+
+    # Set seeds for reproducibility
+    set_seed(cfg.seeds)
     
     if cfg.modelVersion == 'v2':
         # no need to use transform at every data access
         ft_trn_data = [x for x in ft_trn_data]
         
 
-    ft_trn_loader = DataLoader(dataset=ft_trn_data, batch_size=cfg.finetune.batch_size, shuffle=True, num_workers=cfg.num_workers)
-    ft_val_loader = DataLoader(dataset=ft_val_data, batch_size=cfg.finetune.batch_size, shuffle=False, num_workers=cfg.num_workers)
-    ft_test_loader = DataLoader(dataset=ft_test_data, batch_size=cfg.finetune.batch_size, shuffle=False, num_workers=cfg.num_workers)
+    ft_trn_loader = DataLoader(dataset=ft_trn_data, batch_size=cfg.finetune.batch_size, shuffle=True, num_workers=cfg.num_workers, worker_init_fn=worker_init_fn)
+    ft_val_loader = DataLoader(dataset=ft_val_data, batch_size=cfg.finetune.batch_size, shuffle=False, num_workers=cfg.num_workers, worker_init_fn=worker_init_fn)
+    ft_test_loader = DataLoader(dataset=ft_test_data, batch_size=cfg.finetune.batch_size, shuffle=False, num_workers=cfg.num_workers, worker_init_fn=worker_init_fn)
 
     if cfg.finetune.early_stopping:
         early_stopping = EarlyStopping(patience=cfg.finetune.early_stopping_patience)
@@ -57,9 +59,7 @@ def finetune(ft_trn_data, ft_val_data, ft_test_data, model, model_name, cfg, dev
     elif cfg.finetuneDataset == 'diblock':
         out_dim = 5 # 5 classes
         criterion = nn.BCEWithLogitsLoss() # binary multiclass classification
-    elif cfg.finetuneDataset == 'zinc':
-        out_dim = 1
-        criterion = nn.L1Loss()
+
     else:
         raise ValueError('Invalid dataset name')
     
@@ -129,8 +129,7 @@ def finetune(ft_trn_data, ft_val_data, ft_test_data, model, model_name, cfg, dev
                 true_labels = torch.stack([y_lamellar, y_cylinder, y_sphere, y_gyroid, y_disordered], dim=1)
 
                 train_loss = criterion(y_pred_trn, true_labels)
-            elif cfg.finetuneDataset == 'zinc':
-                train_loss = criterion(y_pred_trn, data.y.float())
+
             else:
                 raise ValueError('Invalid dataset name')
             
@@ -173,10 +172,7 @@ def finetune(ft_trn_data, ft_val_data, ft_test_data, model, model_name, cfg, dev
                         all_y_pred_val.extend(y_pred_val.detach().cpu().numpy())
                         all_true_val.extend(true_labels.detach().cpu().numpy())
 
-                    elif cfg.finetuneDataset == 'zinc':
-                        val_loss += criterion(y_pred_val, data.y.float())
-                        all_y_pred_val.extend(y_pred_val.detach().cpu().numpy())
-                        all_true_val.extend(data.y.detach().cpu().numpy())
+
                     else:
                         raise ValueError('Invalid dataset name')
                     
@@ -222,16 +218,21 @@ def finetune(ft_trn_data, ft_val_data, ft_test_data, model, model_name, cfg, dev
                 )
                 metrics['prc_mean'] = prc_mean
                 metrics['roc_mean'] = roc_mean
-            elif cfg.finetuneDataset == 'zinc':
-                print(f'Val Loss: {val_loss}')
+
             else:
                 raise ValueError('Invalid dataset name')
             # Early stopping optionally
             if cfg.finetune.early_stopping:
-                early_stopping(val_loss, model)
-                if early_stopping.early_stop:
-                    print("Early stopping at epoch:", epoch)
-                    break
+                # Only check for early stopping if min_epochs have passed
+                if epoch + 1 >= cfg.finetune.min_epochs:
+                    early_stopping(val_loss, model)
+                    if early_stopping.early_stop:
+                        print("Early stopping at epoch:", epoch + 1)
+                        break
+                else:
+                    # Reset early stopping counter before min_epochs
+                    early_stopping.early_stop = False
+                    early_stopping.counter = 0
             
     # Evaluate the model on test set for final performance estimate
     if cfg.finetune.early_stopping:
@@ -266,10 +267,7 @@ def finetune(ft_trn_data, ft_val_data, ft_test_data, model, model_name, cfg, dev
                 all_y_pred_test.extend(y_pred_test.detach().cpu().numpy())
                 all_true_test.extend(true_labels.detach().cpu().numpy())
 
-            elif cfg.finetuneDataset == 'zinc':
-                test_loss += criterion(y_pred_test, data.y.float())
-                all_y_pred_test.extend(y_pred_test.detach().cpu().numpy())
-                all_true_test.extend(data.y.detach().cpu().numpy())
+
             else:
                 raise ValueError('Invalid dataset name')
             
@@ -310,8 +308,7 @@ def finetune(ft_trn_data, ft_val_data, ft_test_data, model, model_name, cfg, dev
         )
         metrics_test['prc_mean'] = prc_mean
         metrics_test['roc_mean'] = roc_mean
-    elif cfg.finetuneDataset == 'zinc':
-        print(f'test Loss: {test_loss}')
+
     else:
         raise ValueError('Invalid dataset name')
     
