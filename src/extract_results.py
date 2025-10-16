@@ -1,3 +1,7 @@
+"""
+Script to extract and aggregate results from multiple CSV files generated during training and testing
+"""
+
 import os
 import pandas as pd
 import re

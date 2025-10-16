@@ -12,31 +12,189 @@ from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_squared_error, r2_score
 from config import cfg, update_cfg
 
-import numpy as np
-import pandas as pd
+from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.metrics import roc_auc_score, average_precision_score
+from sklearn.ensemble import RandomForestClassifier
+
 import pickle
 
 
 if __name__ == '__main__':
-    cfg = update_cfg(cfg)
+    dataset_name = "diblock"  # "aldeghi" or "diblock"
+    if dataset_name == "aldeghi":
+        cfg = update_cfg(cfg)
 
-    
-    with open(f'Data/dataset-poly_fps_counts.pkl', 'rb') as f:
-        data = pickle.load(f)
+        
+        with open(f'Data/dataset-poly_fps_counts.pkl', 'rb') as f:
+            data = pickle.load(f)
 
-    X_full = data['X']
-    Y_full = data['Y']['EA vs SHE (eV)'].values  # Use only EA
-    # --- Precompute fingerprints and targets ---
-    # Define KFold split once
-    # K-Fold splitting, random
+        X_full = data['X']
+        Y_full = data['Y']['EA vs SHE (eV)'].values  # Use only EA
+        # --- Precompute fingerprints and targets ---
+        # Define KFold split once
+        # K-Fold splitting, random
 
-    if cfg.split_type == "Random":
-        print("Using random splitting")
-        kf = KFold(n_splits=cfg.runs, shuffle=True, random_state=12345)
-        splits = list(kf.split(X_full))
+        if cfg.split_type == "Random":
+            print("Using random splitting")
+            kf = KFold(n_splits=cfg.runs, shuffle=True, random_state=12345)
+            splits = list(kf.split(X_full))
+
+            # Define seeds and FT percentages, same as in JEPA setup for reproducibility
+            aldeghiFTPercentages = [0.01, 0.02, 0.04, 0.1, 0.2]
+            seed_sets = {
+                0: [42, 123, 777, 888, 999],
+                1: [421, 1231, 7771, 8881, 9991],
+                2: [422, 1232, 7772, 8882, 9992]
+            }
+            metrics = collections.defaultdict(list)
+            metrics_test = collections.defaultdict(list)
+            for cfg_seeds, seeds in seed_sets.items():
+                print("Used seeds:", seeds)
+
+                for ft_percentage in aldeghiFTPercentages:
+                    print(f"Running for fine-tune percentage: {ft_percentage}")
+
+                    
+
+                    for run_idx, (train_index, test_index) in enumerate(splits):
+                        print("----------------------------------------")
+                        print(f'Run {run_idx}/{cfg.runs - 1}')
+
+                        # Split
+                        X_train_full = X_full.iloc[train_index]
+                        Y_train_full = Y_full[train_index]
+                        X_test_full = X_full.iloc[test_index]
+                        Y_test_full = Y_full[test_index]
+
+                        val_idx, test_idx = train_test_split(
+                            np.arange(len(X_test_full)), test_size=0.5, random_state=12345
+                        )
+                        X_val = X_test_full.iloc[val_idx]
+                        Y_val = Y_test_full[val_idx]
+                        X_test = X_test_full.iloc[test_idx]
+                        Y_test = Y_test_full[test_idx]
+
+                        # Sampling training subset
+                        random.seed(seeds[run_idx])
+                        np.random.seed(seeds[run_idx])
+                        subset_size = int(math.ceil(ft_percentage * len(X_train_full) / 64) * 64)
+                        selected_indices = np.random.choice(len(X_train_full), size=subset_size, replace=False)
+
+                        X_train = X_train_full.iloc[selected_indices]
+                        Y_train = Y_train_full[selected_indices]
+
+                        # Train RF
+                        rf = RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42, n_jobs=12)
+                        rf.fit(X_train, Y_train)
+
+                        # Predict
+                        Y_pred_train = rf.predict(X_train)
+                        Y_pred_val = rf.predict(X_val)
+                        Y_pred_test = rf.predict(X_test)
+
+                        # Metrics (only EA)
+                        r2_train = r2_score(Y_train, Y_pred_train)
+                        r2_val = r2_score(Y_val, Y_pred_val)
+                        r2_test = r2_score(Y_test, Y_pred_test)
+
+                        rmse_train = math.sqrt(mean_squared_error(Y_train, Y_pred_train))
+                        rmse_val = math.sqrt(mean_squared_error(Y_val, Y_pred_val))
+                        rmse_test = math.sqrt(mean_squared_error(Y_test, Y_pred_test))
+
+                        metrics['r2_train'].append(r2_train)
+                        metrics['r2_val'].append(r2_val)
+                        metrics['fold'].append(run_idx)
+                        metrics["seed_set"].append(cfg_seeds)
+                        metrics["finetune_percentage"].append(ft_percentage)
+                        metrics_test['r2'].append(r2_test)
+                        metrics_test['fold'].append(run_idx)
+                        metrics_test["seed_set"].append(cfg_seeds)
+                        metrics_test["finetune_percentage"].append(ft_percentage)
+
+
+                        metrics['rmse_train'].append(rmse_train)
+                        metrics['rmse_val'].append(rmse_val)
+                        metrics_test['rmse'].append(rmse_test)
+
+            df = pd.DataFrame(metrics)
+            df.to_csv(f'Results/experiments_paper/RF_results_train.csv', index=False)
+            df = pd.DataFrame(metrics_test)
+            df.to_csv(f'Results/experiments_paper/RF_results_test.csv', index=False)
+
+        elif cfg.split_type == "MonomerA":
+            print("Using MonomerA splitting")
+            # Define seeds and FT percentages, same as in JEPA setup for reproducibility
+            seed_sets = {
+                0: [42],
+                1: [421],
+                2: [422]
+            }
+            # --- Train the rf using the monomer A split and the stored indices --- 
+            metrics = collections.defaultdict(list)
+            metrics_test = collections.defaultdict(list)
+            for cfg_seeds, seeds in seed_sets.items():
+                print("Used seeds:", seeds)
+
+                for ft_percentage in [0.01, 0.02, 0.04, 0.1, 0.2]:
+                    print(f"Running for fine-tune percentage: {ft_percentage}")
+
+                    # Load indices from Data/MonomerA_CV/fold_0/train/whole_trn_indices.txt
+                    for fold in range(9):
+                        ft_train_index = np.loadtxt(f'Data/Monomer_A_splits/fold_{fold}/train/ft_trn_indices_perc_{ft_percentage}_seed_{seeds[0]}.txt', dtype=int)
+                        test_index = np.loadtxt(f'Data/Monomer_A_splits/fold_{fold}/test/test_indices.txt', dtype=int)
+
+                        # Split
+                        X_train = X_full.iloc[ft_train_index]
+                        Y_train = Y_full[ft_train_index]
+                        X_test = X_full.iloc[test_index]
+                        Y_test = Y_full[test_index]
+
+                        assert len(set(X_train.index) & set(X_test.index)) == 0, "Data leakage: train and test overlap!"
+
+                        # Train RF
+                        rf = RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42, n_jobs=12)
+                        rf.fit(X_train, Y_train)
+
+                        # Predict
+                        Y_pred_train = rf.predict(X_train)
+                        Y_pred_test = rf.predict(X_test)
+
+                        # Metrics (only EA)
+                        r2_train = r2_score(Y_train, Y_pred_train)
+                        r2_test = r2_score(Y_test, Y_pred_test)
+
+                        rmse_train = math.sqrt(mean_squared_error(Y_train, Y_pred_train))
+                        rmse_test = math.sqrt(mean_squared_error(Y_test, Y_pred_test))
+
+                        metrics['r2_train'].append(r2_train)
+                        metrics['fold'].append(fold)
+                        metrics["seed"].append(seeds[0])
+                        metrics["finetune_percentage"].append(ft_percentage)
+                        metrics_test['r2'].append(r2_test)
+                        metrics_test['fold'].append(fold)
+                        metrics_test["seed"].append(seeds[0])
+                        metrics_test["finetune_percentage"].append(ft_percentage)
+                        metrics['rmse_train'].append(rmse_train)
+                        metrics_test['rmse'].append(rmse_test)
+            df = pd.DataFrame(metrics)
+            df.to_csv(f'Results/experiments_paper/RF_results_MonomerA_split_train.csv', index=False)
+            df = pd.DataFrame(metrics_test)
+            df.to_csv(f'Results/experiments_paper/RF_results_MonomerA_split_test.csv', index=False)
+
+    ### --- Diblock dataset --- ###
+    if dataset_name == "diblock":
+
+        cfg = update_cfg(cfg)
+
+        
+        data = pd.read_pickle('Data/dataset-fps_counts-stoich_diblock.pkl')
+
+        X_full = data['X']
+        Y_full = data['Y']
+
 
         # Define seeds and FT percentages, same as in JEPA setup for reproducibility
-        aldeghiFTPercentages = [0.01, 0.02, 0.04, 0.1, 0.2]
+        diblockFTPercentages = [0.04, 0.08, 0.12, 0.16, 0.24, 0.32, 0.48, 0.8]
         seed_sets = {
             0: [42, 123, 777, 888, 999],
             1: [421, 1231, 7771, 8881, 9991],
@@ -47,132 +205,70 @@ if __name__ == '__main__':
         for cfg_seeds, seeds in seed_sets.items():
             print("Used seeds:", seeds)
 
-            for ft_percentage in aldeghiFTPercentages:
+            for ft_percentage in diblockFTPercentages:
                 print(f"Running for fine-tune percentage: {ft_percentage}")
 
-                
-
+                sss = StratifiedShuffleSplit(n_splits=5, test_size=0.2, random_state=12345)
+                phase1_labels = Y_full.idxmax(axis=1).tolist()
+                splits = list(sss.split(X_full, phase1_labels))
                 for run_idx, (train_index, test_index) in enumerate(splits):
                     print("----------------------------------------")
                     print(f'Run {run_idx}/{cfg.runs - 1}')
 
                     # Split
-                    X_train_full = X_full.iloc[train_index]
-                    Y_train_full = Y_full[train_index]
-                    X_test_full = X_full.iloc[test_index]
-                    Y_test_full = Y_full[test_index]
+                    X_train = X_full.iloc[train_index]
+                    Y_train = Y_full.iloc[train_index]
+                    X_test = X_full.iloc[test_index]
+                    Y_test = Y_full.iloc[test_index]
 
-                    val_idx, test_idx = train_test_split(
-                        np.arange(len(X_test_full)), test_size=0.5, random_state=12345
-                    )
-                    X_val = X_test_full.iloc[val_idx]
-                    Y_val = Y_test_full[val_idx]
-                    X_test = X_test_full.iloc[test_idx]
-                    Y_test = Y_test_full[test_idx]
 
                     # Sampling training subset
                     random.seed(seeds[run_idx])
                     np.random.seed(seeds[run_idx])
-                    subset_size = int(math.ceil(ft_percentage * len(X_train_full) / 64) * 64)
-                    selected_indices = np.random.choice(len(X_train_full), size=subset_size, replace=False)
+                    subset_size = int(min((ft_percentage * len(X_full)), len(X_train)))
+                    selected_indices = np.random.choice(len(X_train), size=subset_size, replace=False)
 
-                    X_train = X_train_full.iloc[selected_indices]
-                    Y_train = Y_train_full[selected_indices]
+                    X_train_subset = X_train.iloc[selected_indices]
+                    Y_train_subset = Y_train.iloc[selected_indices]
+                    assert len(set(X_train_subset.index) & set(X_test.index)) == 0, "Data leakage: train and test overlap!"
 
                     # Train RF
-                    rf = RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42, n_jobs=12)
-                    rf.fit(X_train, Y_train)
+                    model = RandomForestClassifier(n_estimators=100, max_depth=None, criterion='gini', class_weight="balanced",
+                                        random_state=42, n_jobs=12)
+                    # train model
+                    model.fit(X_train_subset, Y_train_subset)
 
-                    # Predict
-                    Y_pred_train = rf.predict(X_train)
-                    Y_pred_val = rf.predict(X_val)
-                    Y_pred_test = rf.predict(X_test)
+                    # make predictions
+                    Y_pred = model.predict_proba(X_test)  # n_labels x n_samples x n_classes
 
-                    # Metrics (only EA)
-                    r2_train = r2_score(Y_train, Y_pred_train)
-                    r2_val = r2_score(Y_val, Y_pred_val)
-                    r2_test = r2_score(Y_test, Y_pred_test)
+                    # check order of classes in array to make sure we're getting the right probability
+                    for c in model.classes_:
+                        if len(c) == 2:
+                            assert c[1] == 1
+                        else:
+                            assert c[0] == 0
 
-                    rmse_train = math.sqrt(mean_squared_error(Y_train, Y_pred_train))
-                    rmse_val = math.sqrt(mean_squared_error(Y_val, Y_pred_val))
-                    rmse_test = math.sqrt(mean_squared_error(Y_test, Y_pred_test))
+                    _Y_pred = []
+                    for y_pred in Y_pred:
+                        if y_pred.shape[1] == 2:
+                            _Y_pred.append(y_pred)
+                        elif y_pred.shape[1] == 1:
+                            y_pred = np.pad(y_pred, [(0,0),(0,1)], mode='constant', constant_values=0.)
+                            _Y_pred.append(y_pred)
 
-                    metrics['r2_train'].append(r2_train)
-                    metrics['r2_val'].append(r2_val)
+                    df_predictions = pd.DataFrame(np.array(_Y_pred)[:,:,1].T, columns=Y_test.columns)
+
+                    # Assuming Y_test is a DataFrame like the original Y_full
+                    # and Y_pred is a list of arrays per class from predict_proba
+
+                    roc = roc_auc_score(Y_test, df_predictions, average='macro')
+                    # average precision is the same as the area under the precision-recall curve
+                    prc = average_precision_score(Y_test, df_predictions, average='macro')
+
+                    # Store results
+                    metrics['prc'].append(prc)
                     metrics['fold'].append(run_idx)
                     metrics["seed_set"].append(cfg_seeds)
                     metrics["finetune_percentage"].append(ft_percentage)
-                    metrics_test['r2'].append(r2_test)
-                    metrics_test['fold'].append(run_idx)
-                    metrics_test["seed_set"].append(cfg_seeds)
-                    metrics_test["finetune_percentage"].append(ft_percentage)
-
-
-                    metrics['rmse_train'].append(rmse_train)
-                    metrics['rmse_val'].append(rmse_val)
-                    metrics_test['rmse'].append(rmse_test)
-
         df = pd.DataFrame(metrics)
-        df.to_csv(f'Results/experiments_paper/RF_results_train.csv', index=False)
-        df = pd.DataFrame(metrics_test)
-        df.to_csv(f'Results/experiments_paper/RF_results_test.csv', index=False)
-
-    elif cfg.split_type == "MonomerA":
-        print("Using MonomerA splitting")
-        # Define seeds and FT percentages, same as in JEPA setup for reproducibility
-        seed_sets = {
-            0: [42],
-            1: [421],
-            2: [422]
-        }
-        # --- Train the rf using the monomer A split and the stored indices --- 
-        metrics = collections.defaultdict(list)
-        metrics_test = collections.defaultdict(list)
-        for cfg_seeds, seeds in seed_sets.items():
-            print("Used seeds:", seeds)
-
-            for ft_percentage in [0.01, 0.02, 0.04, 0.1, 0.2]:
-                print(f"Running for fine-tune percentage: {ft_percentage}")
-
-                # Load indices from Data/MonomerA_CV/fold_0/train/whole_trn_indices.txt
-                for fold in range(9):
-                    ft_train_index = np.loadtxt(f'Data/Monomer_A_splits/fold_{fold}/train/ft_trn_indices_perc_{ft_percentage}_seed_{seeds[0]}.txt', dtype=int)
-                    test_index = np.loadtxt(f'Data/Monomer_A_splits/fold_{fold}/test/test_indices.txt', dtype=int)
-
-                    # Split
-                    X_train = X_full.iloc[ft_train_index]
-                    Y_train = Y_full[ft_train_index]
-                    X_test = X_full.iloc[test_index]
-                    Y_test = Y_full[test_index]
-
-                    assert len(set(X_train.index) & set(X_test.index)) == 0, "Data leakage: train and test overlap!"
-
-                    # Train RF
-                    rf = RandomForestRegressor(n_estimators=100, max_depth=None, random_state=42, n_jobs=12)
-                    rf.fit(X_train, Y_train)
-
-                    # Predict
-                    Y_pred_train = rf.predict(X_train)
-                    Y_pred_test = rf.predict(X_test)
-
-                    # Metrics (only EA)
-                    r2_train = r2_score(Y_train, Y_pred_train)
-                    r2_test = r2_score(Y_test, Y_pred_test)
-
-                    rmse_train = math.sqrt(mean_squared_error(Y_train, Y_pred_train))
-                    rmse_test = math.sqrt(mean_squared_error(Y_test, Y_pred_test))
-
-                    metrics['r2_train'].append(r2_train)
-                    metrics['fold'].append(fold)
-                    metrics["seed"].append(seeds[0])
-                    metrics["finetune_percentage"].append(ft_percentage)
-                    metrics_test['r2'].append(r2_test)
-                    metrics_test['fold'].append(fold)
-                    metrics_test["seed"].append(seeds[0])
-                    metrics_test["finetune_percentage"].append(ft_percentage)
-                    metrics['rmse_train'].append(rmse_train)
-                    metrics_test['rmse'].append(rmse_test)
-        df = pd.DataFrame(metrics)
-        df.to_csv(f'Results/experiments_paper/RF_results_MonomerA_split_train.csv', index=False)
-        df = pd.DataFrame(metrics_test)
-        df.to_csv(f'Results/experiments_paper/RF_results_MonomerA_split_test.csv', index=False)
+        df.to_csv(f'Results/experiments_paper/RF_results_diblock_test_stoich.csv', index=False)

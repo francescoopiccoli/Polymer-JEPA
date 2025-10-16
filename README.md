@@ -1,7 +1,7 @@
 # Polymer-JEPA
 
 ## Setup Environment
-### Option 1: Conda Environment (preferred for same package versions)
+### Option 1: Conda Environment
 There are two .yml files to create the conda environment:
 \
 For Linux:
@@ -10,6 +10,8 @@ For Linux:
 conda env create -f environment_polymera-jepa-linux.yml
 # Activate the environment
 conda activate polymera-jepa
+# Post install xgboost (baseline model) without dependency change
+bash post_install_xgb.sh
 ```
 For MacOS:
 ```bash
@@ -17,22 +19,12 @@ For MacOS:
 conda env create -f environment_polymera-jepa-macos.yml
 # Activate the environment
 conda activate polymera-jepa
+# Post install xgboost (baseline model) without dependency change
+bash post_install_xgb.sh
 ```
 
-### Option 2: Manual PyTorch Geometric Installation
-```bash
-conda create -n polymer-jepa python=3.10
-conda activate polymer-jepa
-pip install torch-geometric==2.3.0 torch-sparse torch-scatter torch-cluster -f https://pytorch-geometric.com/whl/torch-2.1.0+cu121.html
-pip install torch==2.1 wandb networkx yacs metis kaleido tensorboard einops pillow tqdm pandas rdkit matplotlib plotly seaborn umap
-```
-
-### Option 3: Containerization
+### Option 2: Container
 Alternatively setup the environment using containerization (see `environment_apptainer.yml` and `apptainer_env.def` files).
-
-### Project Structure
-
-See [STRUCTURE.md](STRUCTURE.md) for detailed project organization.
 
 ### Codebase Overview
 
@@ -59,9 +51,9 @@ See [STRUCTURE.md](STRUCTURE.md) for detailed project organization.
 - **`src/extract_results.py`** - Result extraction and analysis tools
 
 #### Baseline Methods
-- **`src/train_test_rf.py`** - Random Forest baseline for Aldeghi dataset
-- **`src/train_test_rf_diblock.py`** - Random Forest baseline for diblock dataset
-- **`src/aggregate_results_rf.py`** - Random Forest result aggregation
+- **`src/train_test_rf.py`** - Random Forest baseline
+- **`src/train_test_xgboost.py`** - XGBoost baseline
+- **`src/aggregate_results_baselines.py`** - Baseline result aggregation
 - **`src/linearFinetune.py`** - Linear probe evaluation
 
 #### Data Processing
