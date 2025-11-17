@@ -7,18 +7,18 @@ There are two .yml files to create the conda environment:
 For Linux:
 ```bash
 # Create environment from the exported YML file (linux)
-conda env create -f environment_polymera-jepa-linux.yml
+conda env create -f environment_polymer-jepa-linux.yml
 # Activate the environment
-conda activate polymera-jepa
+conda activate polymer-jepa
 # Post install xgboost (baseline model) without dependency change
 bash post_install_xgb.sh
 ```
 For MacOS:
 ```bash
 # Create environment from the exported YML file (linux)
-conda env create -f environment_polymera-jepa-macos.yml
+conda env create -f environment_polymer-jepa-macos.yml
 # Activate the environment
-conda activate polymera-jepa
+conda activate polymer-jepa
 # Post install xgboost (baseline model) without dependency change
 bash post_install_xgb.sh
 ```
