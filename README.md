@@ -1,4 +1,4 @@
-# Polymer-JEPA
+# Polymer-JEPA: Joint Embedding Predictive Architecture for self-supervised pretraining on polymer molecular graphs
 
 ## Setup Environment
 ### Option 1: Conda Environment
@@ -185,15 +185,15 @@ python main.py --config config_example.yaml
 - `shouldFinetune`: Enable/disable finetuning phase
 - `experimentName`: Name for wandb experiment tracking
 
-### Data 
+## Data 
 The used data is partly deposited in the Data/ folder. Larger preprocessed pytorch files and polymer fingerprints for baseline models are deposited at https://doi.org/10.5281/zenodo.17630815. 
 
-### Experiments
+## Experiments
 Besides running experiments with JEPA pretraining, we also run the experiments using a baseline random forest model, as implemented in [polymer-chemprop](https://github.com/coleygroup/polymer-chemprop/tree/master/chemprop/features), and using an input-space SSL architecture developed for the same architecture [[1]](#1).
 We provide the results in the folder Results/experiments_paper/. The code for running the random forest model is located in the scripts `src.train_test_rf.py`
  
 
-### Credits 
+## Credits 
 The JEPA models code and `transform.py` are largely based on [Graph-JEPA](https://github.com/geriskenderi/graph-jepa) code, itself based on the [Graph-ViT-MLPMixer](https://github.com/XiaoxinHe/Graph-ViT-MLPMixer) code.
 The featurization process code is taken from [polymer-chemprop](https://github.com/coleygroup/polymer-chemprop/tree/master/chemprop/features) code. 
 
