@@ -26,127 +26,131 @@ bash post_install_xgb.sh
 ### Option 2: Container
 Alternatively setup the environment using containerization (see `environment_apptainer.yml` and `apptainer_env.def` files).
 
-### Codebase Overview
+## Codebase Overview
+<details>
+  <summary>Description of repository structure and files</summary>
 
-#### Core Files
-- **`main.py`** - Main entry point that orchestrates the complete training pipeline
-- **`src/config.py`** - Configuration management with all hyperparameters and settings
-- **`src/data.py`** - Dataset creation, loading, and data selection strategies
-- **`src/pretrain.py`** - JEPA pretraining implementation with self-supervised learning
-- **`src/finetune.py`** - Supervised finetuning for downstream property prediction
-- **`src/training.py`** - Core training utilities and optimization functions
 
-#### Model Architecture
-- **`src/JEPA_models/`**
-  - `PolymerJEPAv1.py` - JEPA model V1 (using transformers as encoders)
-  - `PolymerJEPAv2.py` - JEPA model V2, no transformers, GNNs as encoders. This is the best-performing version utilized in the paper as default.
-  - `WDNodeMPNN.py` - Weighted-directed (multi-layer) node message passing neural network
-  - `WDNodeMPNNLayer.py` - Single layer weighted-directed node message passing, designed to be used as a building block
-  - `model_utils/` - Utility functions for model components
+  #### Core Files
+  - **`main.py`** - Main entry point that orchestrates the complete training pipeline
+  - **`src/config.py`** - Configuration management with all hyperparameters and settings
+  - **`src/data.py`** - Dataset creation, loading, and data selection strategies
+  - **`src/pretrain.py`** - JEPA pretraining implementation with self-supervised learning
+  - **`src/finetune.py`** - Supervised finetuning for downstream property prediction
+  - **`src/training.py`** - Core training utilities and optimization functions
 
-#### Analysis & Visualization
-- **`src/visualize.py`** - Embedding space visualization and result plotting
-- **`src/plots.py`** - Additional plotting utilities
-- **`src/logger.py`** - Weights & Biases logging configuration
-- **`src/extract_results.py`** - Result extraction and analysis tools
+  #### Model Architecture
+  - **`src/JEPA_models/`**
+    - `PolymerJEPAv1.py` - JEPA model V1 (using transformers as encoders)
+    - `PolymerJEPAv2.py` - JEPA model V2, no transformers, GNNs as encoders. This is the best-performing version utilized in the paper as default.
+    - `WDNodeMPNN.py` - Weighted-directed (multi-layer) node message passing neural network
+    - `WDNodeMPNNLayer.py` - Single layer weighted-directed node message passing, designed to be used as a building block
+    - `model_utils/` - Utility functions for model components
 
-#### Baseline Methods
-- **`src/train_test_rf.py`** - Random Forest baseline
-- **`src/train_test_xgboost.py`** - XGBoost baseline
-- **`src/aggregate_results_baselines.py`** - Baseline result aggregation
-- **`src/linearFinetune.py`** - Linear probe evaluation
+  #### Analysis & Visualization
+  - **`src/visualize.py`** - Embedding space visualization and result plotting
+  - **`src/plots.py`** - Additional plotting utilities
+  - **`src/logger.py`** - Weights & Biases logging configuration
+  - **`src/extract_results.py`** - Result extraction and analysis tools
 
-#### Data Processing
-- **`src/featurization_utils/`**
-  - `featurization.py` - Core molecular graph featurization from SMILES
-  - `featurization_helper.py` - Helper functions for atom/bond features and molecular processing
-- **`src/transform.py`** - Graph transformations for positional encoding and JEPA partitioning
-- **`src/subgraphing_utils/`** - Subgraph extraction methods (motif, METIS, random walk)
+  #### Baseline Methods
+  - **`src/train_test_rf.py`** - Random Forest baseline
+  - **`src/train_test_xgboost.py`** - XGBoost baseline
+  - **`src/aggregate_results_baselines.py`** - Baseline result aggregation
+  - **`src/linearFinetune.py`** - Linear probe evaluation
 
-The data preprocessing pipeline automatically handles polymer SMILES string conversion to graph representations:
+  #### Data Processing
+  - **`src/featurization_utils/`**
+    - `featurization.py` - Core molecular graph featurization from SMILES
+    - `featurization_helper.py` - Helper functions for atom/bond features and molecular processing
+  - **`src/transform.py`** - Graph transformations for positional encoding and JEPA partitioning
+  - **`src/subgraphing_utils/`** - Subgraph extraction methods (motif, METIS, random walk)
 
-1. **Raw Data**: CSV files containing polymer SMILES strings and target properties
-   - `Data/aldeghi_coley_ea_ip_dataset.csv` - Aldeghi dataset with EA/IP properties
-   - `Data/diblock_copolymer_dataset.csv` - Diblock copolymer dataset
+  The data preprocessing pipeline automatically handles polymer SMILES string conversion to graph representations:
 
-2. **Graph Conversion**: Polymer SMILES are converted to PyTorch Geometric graphs via `src/data.py` and `src/featurization_utils/featurization.py`:
-   - **`get_graphs()`** (in `data.py`): Main function that processes CSV files row by row
-   - **`poly_smiles_to_graph()`** (in `featurization.py`): Core featurization function that:
-     - **SMILES Parsing**: Splits polymer strings into monomers, weights, and bond rules
-     - **Molecule Construction**: Creates RDKit molecule objects using `make_polymer_mol()`
-     - **Atom Tagging**: Tags attachment points and core atoms via `tag_atoms_in_repeating_unit()`
-     - **Feature Generation**: Extracts 133-dim node features and 14-dim edge features
-     - **Bond Processing**: Handles both intra-monomer (weight=1.0) and inter-monomer bonds
-     - **Motif Detection**: Identifies molecular substructures using `get_motifs()`
-     - **Graph Assembly**: Constructs PyTorch Geometric `Data` objects with all metadata
-   - **Helper functions** (in `featurization_helper.py`):
-     - `atom_features()`: Extracts atomic properties (hybridization, formal charge, etc.)
-     - `bond_features()`: Extracts bond properties (type, aromaticity, ring membership)
-     - `parse_polymer_rules()`: Parses inter-monomer connection rules
-     - `make_polymer_mol()`: Constructs polymer molecules from SMILES
-     - `check_missing_bonds()`: Validates bond coverage in motif detection
+  1. **Raw Data**: CSV files containing polymer SMILES strings and target properties
+    - `Data/aldeghi_coley_ea_ip_dataset.csv` - Aldeghi dataset with EA/IP properties
+    - `Data/diblock_copolymer_dataset.csv` - Diblock copolymer dataset
 
-3. **Data Cleaning & Validation**: During graph conversion:
-   - **SMILES Validation**: RDKit parsing with error handling for invalid structures
-   - **Molecular Sanitization**: Standardization of bond orders and formal charges
-   - **Bond Connectivity**: Validation of inter-monomer connections based on attachment points
-   - **Missing Bond Detection**: Automated detection and reporting of bonds not covered by motifs
-   - **Atomic Consistency**: Verification that all atoms have valid feature representations
-   - **Stoichiometry Validation**: Ensures polymer composition ratios are correctly parsed
+  2. **Graph Conversion**: Polymer SMILES are converted to PyTorch Geometric graphs via `src/data.py` and `src/featurization_utils/featurization.py`:
+    - **`get_graphs()`** (in `data.py`): Main function that processes CSV files row by row
+    - **`poly_smiles_to_graph()`** (in `featurization.py`): Core featurization function that:
+      - **SMILES Parsing**: Splits polymer strings into monomers, weights, and bond rules
+      - **Molecule Construction**: Creates RDKit molecule objects using `make_polymer_mol()`
+      - **Atom Tagging**: Tags attachment points and core atoms via `tag_atoms_in_repeating_unit()`
+      - **Feature Generation**: Extracts 133-dim node features and 14-dim edge features
+      - **Bond Processing**: Handles both intra-monomer (weight=1.0) and inter-monomer bonds
+      - **Motif Detection**: Identifies molecular substructures using `get_motifs()`
+      - **Graph Assembly**: Constructs PyTorch Geometric `Data` objects with all metadata
+    - **Helper functions** (in `featurization_helper.py`):
+      - `atom_features()`: Extracts atomic properties (hybridization, formal charge, etc.)
+      - `bond_features()`: Extracts bond properties (type, aromaticity, ring membership)
+      - `parse_polymer_rules()`: Parses inter-monomer connection rules
+      - `make_polymer_mol()`: Constructs polymer molecules from SMILES
+      - `check_missing_bonds()`: Validates bond coverage in motif detection
 
-4. **Processed Data**: Graphs are cached as `.pt` files for faster loading:
-   - `Data/aldeghi_graphs_list.pt` - conjugated copolymer (Aldeghi) dataset graphs
-   - `Data/diblock_graphs_list.pt` - Diblock copolymer dataset graphs  
-   - **Caching Logic**: Files are automatically generated on first run and reused unless deleted
-   - **PyTorch Geometric Format**: Graphs stored as `Data` objects with node/edge features and metadata
+  3. **Data Cleaning & Validation**: During graph conversion:
+    - **SMILES Validation**: RDKit parsing with error handling for invalid structures
+    - **Molecular Sanitization**: Standardization of bond orders and formal charges
+    - **Bond Connectivity**: Validation of inter-monomer connections based on attachment points
+    - **Missing Bond Detection**: Automated detection and reporting of bonds not covered by motifs
+    - **Atomic Consistency**: Verification that all atoms have valid feature representations
+    - **Stoichiometry Validation**: Ensures polymer composition ratios are correctly parsed
 
-#### Dataset Creation Pipeline
-The `create_data()` function orchestrates the complete data processing workflow:
-1. **Pre-transforms**: Applies positional encoding (`PositionalEncodingTransform`)
-2. **Training Transforms**: Configures graph partitioning for JEPA (`GraphJEPAPartitionTransform`)
-3. **Dataset Wrapping**: Creates PyTorch Geometric `InMemoryDataset` objects
-5. **Transform Application**: Applies different transforms for training vs. validation
+  4. **Processed Data**: Graphs are cached as `.pt` files for faster loading:
+    - `Data/aldeghi_graphs_list.pt` - conjugated copolymer (Aldeghi) dataset graphs
+    - `Data/diblock_graphs_list.pt` - Diblock copolymer dataset graphs  
+    - **Caching Logic**: Files are automatically generated on first run and reused unless deleted
+    - **PyTorch Geometric Format**: Graphs stored as `Data` objects with node/edge features and metadata
 
-**Manual Data Processing** (if needed):
-```bash
-# Force regeneration of graph files
-rm Data/*_graphs_list.pt
-python main.py  # Will regenerate graphs automatically
+  #### Dataset Creation Pipeline
+  The `create_data()` function orchestrates the complete data processing workflow:
+  1. **Pre-transforms**: Applies positional encoding (`PositionalEncodingTransform`)
+  2. **Training Transforms**: Configures graph partitioning for JEPA (`GraphJEPAPartitionTransform`)
+  3. **Dataset Wrapping**: Creates PyTorch Geometric `InMemoryDataset` objects
+  5. **Transform Application**: Applies different transforms for training vs. validation
 
-# Or run data processing directly
-python -c "from src.data import get_graphs; get_graphs('aldeghi')"
-```
+  **Manual Data Processing** (if needed):
+  ```bash
+  # Force regeneration of graph files
+  rm Data/*_graphs_list.pt
+  python main.py  # Will regenerate graphs automatically
 
-**Note**: Graph conversion runs automatically on first execution. Subsequent runs load cached graphs unless files are deleted.
+  # Or run data processing directly
+  python -c "from src.data import get_graphs; get_graphs('aldeghi')"
+  ```
 
-#### Data Selection Strategies
-- Data split scenario can be configured in `src/config.py`: Random datasplit or scaffold-based MonomerA split.
+  **Note**: Graph conversion runs automatically on first execution. Subsequent runs load cached graphs unless files are deleted.
 
-#### Data Format and Structure
-**Input Format**: Polymer SMILES strings follow the pattern:
-```
-[*:1]monomer1.[*:2]monomer2|weight1|weight2|bond_rules
-```
-Example: `[*:1]c1cc(F)c([*:2])cc1F.[*:3]c1c(O)cc(O)c([*:4])c1O|0.5|0.5|<1-2:0.375:0.375<...`
+  #### Data Selection Strategies
+  - Data split scenario can be configured in `src/config.py`: Random datasplit or scaffold-based MonomerA split.
 
-**Graph Structure**: Each processed graph contains:
-- `x`: Node features (133-dim: atom type, hybridization, formal charge, etc.)
-- `edge_index`: Graph connectivity in COO format
-- `edge_attr`: Edge features (14-dim: bond type, aromaticity, ring membership, etc.)
-- `node_weight`: Stoichiometry-based weights for polymer composition
-- `edge_weight`: Bond weights (1.0 for intra-monomer, variable for inter-monomer)
-- `motifs`: Detected molecular motifs and subgraph partitions
-- `monomer_mask`: Identifies which monomer each atom belongs to
+  #### Data Format and Structure
+  **Input Format**: Polymer SMILES strings follow the pattern:
+  ```
+  [*:1]monomer1.[*:2]monomer2|weight1|weight2|bond_rules
+  ```
+  Example: `[*:1]c1cc(F)c([*:2])cc1F.[*:3]c1c(O)cc(O)c([*:4])c1O|0.5|0.5|<1-2:0.375:0.375<...`
 
-#### Configuration
-Key data processing parameters in `src/config.py`:
-- `cfg.finetuneDataset`: Dataset selection ('aldeghi', 'diblock')
-- `cfg.finetune.aldeghiFTPercentage`: Training data percentage for Aldeghi dataset
-- `cfg.finetune.diblockFTPercentage`: Training data percentage for diblock dataset
+  **Graph Structure**: Each processed graph contains:
+  - `x`: Node features (133-dim: atom type, hybridization, formal charge, etc.)
+  - `edge_index`: Graph connectivity in COO format
+  - `edge_attr`: Edge features (14-dim: bond type, aromaticity, ring membership, etc.)
+  - `node_weight`: Stoichiometry-based weights for polymer composition
+  - `edge_weight`: Bond weights (1.0 for intra-monomer, variable for inter-monomer)
+  - `motifs`: Detected molecular motifs and subgraph partitions
+  - `monomer_mask`: Identifies which monomer each atom belongs to
 
-### Usage
+  #### Configuration
+  Key data processing parameters in `src/config.py`:
+  - `cfg.finetuneDataset`: Dataset selection ('aldeghi', 'diblock')
+  - `cfg.finetune.aldeghiFTPercentage`: Training data percentage for Aldeghi dataset
+  - `cfg.finetune.diblockFTPercentage`: Training data percentage for diblock dataset
+</details>
 
-#### Basic Usage
+## Basic usage
+
+#### Main.py is central script
 ```bash
 # Default configuration (pretraining + finetuning)
 python main.py
@@ -162,11 +166,13 @@ python main.py finetuneDataset diblock modelVersion v2
 ```
 
 #### Configuration Options
+Detailed configuration options (dataset, model architecture, training) can be controlled via arguments or in a config.yaml file (more finegrained control).
+
 ```bash
 # Override specific parameters
 python main.py pretrain.epochs 50 model.hidden_size 300
 
-# Use configuration file
+# Use configuration file (for finegrained control)
 python main.py --config config_example.yaml
 
 # See runs.sh and run.sbatch for more examples
@@ -178,6 +184,9 @@ python main.py --config config_example.yaml
 - `shouldPretrain`: Enable/disable pretraining phase
 - `shouldFinetune`: Enable/disable finetuning phase
 - `experimentName`: Name for wandb experiment tracking
+
+### Data 
+The used data is partly deposited in the Data/ folder. Larger preprocessed pytorch files and polymer fingerprints for baseline models are deposited at https://doi.org/10.5281/zenodo.17630815. 
 
 ### Experiments
 Besides running experiments with JEPA pretraining, we also run the experiments using a baseline random forest model, as implemented in [polymer-chemprop](https://github.com/coleygroup/polymer-chemprop/tree/master/chemprop/features), and using an input-space SSL architecture developed for the same architecture [[1]](#1).
