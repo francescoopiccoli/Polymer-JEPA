@@ -1,5 +1,7 @@
 # Polymer-JEPA: Joint Embedding Predictive Architecture for self-supervised pretraining on polymer molecular graphs
 
+paper: https://arxiv.org/abs/2506.18194
+
 ## Setup Environment
 ### Option 1: Conda Environment
 There are two .yml files to create the conda environment:
